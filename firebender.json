@@ -1,0 +1,48 @@
+{
+  "useCursorRules": true,
+
+  "ignore": [
+    "**/build/**",
+    "**/.gradle/**",
+    "**/.idea/**",
+    "**/*.iml",
+    "**/local.properties",
+    "**/firebase.json",
+    "**/firebender.json"
+  ],
+
+  "rules": [
+    "This project is an Android application named Touch Lock.",
+    "Touch Lock temporarily disables touch input by displaying a full-screen WindowManager overlay while keeping underlying content visible.",
+    "The app is designed for supervised use cases such as toddlers watching videos or video calls.",
+    "This app must remain fully offline-first and must not require any network access or backend services.",
+    "Minimum SDK is 26. Do not introduce compatibility code for lower API levels.",
+    "Use Jetpack Compose for UI and Hilt for dependency injection.",
+    "The app uses a layered architecture: UI, ViewModel, Domain, Data, and System Runtime.",
+    "UI code must never directly interact with Android services, WindowManager, or overlays.",
+    "All UI actions must flow through ViewModels, use cases, and repositories.",
+    "A foreground service owns the overlay lifecycle and is the single source of truth for lock state.",
+    "Lock state must be exposed using StateFlow.",
+    "Do not introduce Accessibility services or Accessibility permissions unless explicitly instructed.",
+    "Do not introduce kiosk mode, device owner APIs, or system gesture blocking.",
+    "Overlay permission (SYSTEM_ALERT_WINDOW) must be checked before attempting to show any overlay.",
+    "The app must fail safely if overlay permission is missing and must never crash.",
+    "Use NotificationCompat for notifications and create a notification channel (API 26+).",
+    "Notification icons must be monochrome vector drawable resources.",
+    "Prefer explicit, boring, and maintainable solutions over clever abstractions.",
+    "Avoid premature optimization or overengineering.",
+    "Do not refactor existing architecture unless explicitly requested.",
+    "All generated code should be complete, paste-ready Kotlin files.",
+    "Call out Android platform limitations or Play Store policy risks explicitly when relevant."
+  ],
+  "agents": [
+    ".firebender/agents/android_system_engineer.md"
+  ],
+  "commands": [
+  ],
+
+  "subagents": [],
+  "backgroundAgent": {},
+  "mcpServers": {},
+  "mcpEnvFile": ""
+}
