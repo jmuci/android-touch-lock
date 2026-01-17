@@ -1,6 +1,5 @@
 package com.tenmilelabs.touchlock.service
 
-import android.app.Service
 import android.content.Intent
 import androidx.lifecycle.LifecycleService
 import com.tenmilelabs.touchlock.data.overlay.OverlayController
