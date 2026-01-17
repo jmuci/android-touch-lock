@@ -18,10 +18,10 @@ class OverlayController @Inject constructor(
 
     private var overlayView: OverlayView? = null
 
-    fun show() {
+    fun show(onUnlockRequested: () -> Unit) {
         if (overlayView != null) return
 
-        overlayView = OverlayView(context)
+        overlayView = OverlayView(context, onUnlockRequested)
         windowManager.addView(overlayView, layoutParams())
     }
 

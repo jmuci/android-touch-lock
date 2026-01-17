@@ -16,7 +16,6 @@ class LockOverlayService : LifecycleService() {
 
     @Inject lateinit var overlayController: OverlayController
     @Inject lateinit var notificationManager: LockNotificationManager
-
     @Inject lateinit var permissionManager: OverlayPermissionManager
 
 
@@ -30,12 +29,17 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun startLock() {
+        if (_lockState.value == LockState.Locked) return
+
         if (!permissionManager.hasPermission()) {
             stopSelf()
             return
         }
 
-        overlayController.show()
+        overlayController.show {
+            stopLock()
+        }
+
         startForeground(
             NOTIFICATION_ID,
             notificationManager.buildLockedNotification()
@@ -43,11 +47,18 @@ class LockOverlayService : LifecycleService() {
         _lockState.value = LockState.Locked
     }
 
+
     private fun stopLock() {
         overlayController.hide()
         stopForeground(STOP_FOREGROUND_REMOVE)
         _lockState.value = LockState.Unlocked
         stopSelf()
+    }
+
+    // Defensive stop. Prevents rare window leaks.
+    override fun onDestroy() {
+        overlayController.hide()
+        super.onDestroy()
     }
 
     companion object {
