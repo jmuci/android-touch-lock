@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import androidx.lifecycle.LifecycleService
 import com.tenmilelabs.touchlock.data.overlay.OverlayController
+import com.tenmilelabs.touchlock.data.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.notification.LockNotificationManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -17,6 +18,9 @@ class LockOverlayService : LifecycleService() {
     @Inject lateinit var overlayController: OverlayController
     @Inject lateinit var notificationManager: LockNotificationManager
 
+    @Inject lateinit var permissionManager: OverlayPermissionManager
+
+
     @Suppress("MissingSuperCall")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -27,6 +31,11 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun startLock() {
+        if (!permissionManager.hasPermission()) {
+            stopSelf()
+            return
+        }
+
         overlayController.show()
         startForeground(
             NOTIFICATION_ID,

@@ -1,5 +1,6 @@
 package com.tenmilelabs.touchlock.data.overlay
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.view.MotionEvent
@@ -13,6 +14,7 @@ class OverlayView(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.TRANSPARENT)
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         // consume everything
         // detect unlock gesture here
