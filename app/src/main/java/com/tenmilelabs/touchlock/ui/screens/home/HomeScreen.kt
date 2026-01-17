@@ -56,7 +56,7 @@ private fun HomeScreenContent(
 
         if (!hasOverlayPermission) {
             Text(
-                text = "Overlay permission is required to disable touch input.",
+                text = "Touch Lock needs permission to draw over other apps in order to block touch input.",
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
