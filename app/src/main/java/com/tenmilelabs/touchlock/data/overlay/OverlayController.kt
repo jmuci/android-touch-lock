@@ -1,10 +1,9 @@
-package com.example.touchlock.overlay
+package com.tenmilelabs.touchlock.data.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.WindowManager
-import com.tenmilelabs.touchlock.data.overlay.OverlayView
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
