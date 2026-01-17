@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock
+package com.tenmilelabs.touchlock.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,7 +13,8 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var permissionManager: OverlayPermissionManager
+    @Inject
+    lateinit var permissionManager: OverlayPermissionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
