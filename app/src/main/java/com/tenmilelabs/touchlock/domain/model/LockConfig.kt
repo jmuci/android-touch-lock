@@ -5,8 +5,10 @@ data class LockConfig(
     val unlockType: UnlockType
 )
 
-enum class OrientationMode {
-    PORTRAIT, LANDSCAPE, FOLLOW_SYSTEM
+enum class OrientationMode(val title: String) {
+    PORTRAIT("Portrait"),
+    LANDSCAPE("Landscape"),
+    FOLLOW_SYSTEM("Auto")
 }
 
 enum class UnlockType {
