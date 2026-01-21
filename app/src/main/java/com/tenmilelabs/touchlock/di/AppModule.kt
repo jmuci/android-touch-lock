@@ -1,6 +1,8 @@
 package com.tenmilelabs.touchlock.di
 
+import com.tenmilelabs.touchlock.data.repository.ConfigRepositoryImpl
 import com.tenmilelabs.touchlock.data.repository.LockRepositoryImpl
+import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import dagger.Binds
 import dagger.Module
@@ -17,4 +19,10 @@ abstract class AppModule {
     abstract fun bindLockRepository(
         impl: LockRepositoryImpl
     ): LockRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindConfigRepository(
+        impl: ConfigRepositoryImpl
+    ): ConfigRepository
 }
