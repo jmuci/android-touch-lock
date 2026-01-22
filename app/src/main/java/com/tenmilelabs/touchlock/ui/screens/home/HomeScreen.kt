@@ -68,6 +68,7 @@ fun HomeScreen(
         hasOverlayPermission = hasOverlayPermission,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
+        onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestPermission = onRequestPermission,
         anScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged
     )
@@ -79,6 +80,7 @@ private fun HomeScreenContent(
     hasOverlayPermission: Boolean,
     onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
+    onDelayedLockClicked: () -> Unit,
     onRequestPermission: () -> Unit,
     anScreenRotationSettingChanged: (OrientationMode) -> Unit
 ) {
@@ -128,12 +130,18 @@ private fun HomeScreenContent(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick lock button when unlocked
-            Button(
-                onClick = onEnableClicked,
-                modifier = Modifier.fillMaxWidth(0.6f)
+            // Lock buttons when unlocked
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
-                Text("Lock")
+
+                Button(
+                    onClick = onDelayedLockClicked,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                ) {
+                    Text("Lock in 10s")
+                }
             }
         }
 
@@ -293,6 +301,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = true,
                 onEnableClicked = {},
                 onDisableClicked = {},
+                onDelayedLockClicked = {},
                 onRequestPermission = {},
                 anScreenRotationSettingChanged = {}
             )
@@ -308,6 +317,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = true,
                 onEnableClicked = {},
                 onDisableClicked = {},
+                onDelayedLockClicked = {},
                 onRequestPermission = {},
                 anScreenRotationSettingChanged = {}
             )
@@ -334,6 +344,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = false,
                 onEnableClicked = {},
                 onDisableClicked = {},
+                onDelayedLockClicked = {},
                 onRequestPermission = {},
                 anScreenRotationSettingChanged = {}
             )
