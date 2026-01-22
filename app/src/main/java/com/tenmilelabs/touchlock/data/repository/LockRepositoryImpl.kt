@@ -30,6 +30,13 @@ class LockRepositoryImpl @Inject constructor(
         ContextCompat.startForegroundService(context, intent)
     }
 
+    override fun startDelayedLock() {
+        val intent = Intent(context, LockOverlayService::class.java).apply {
+            action = LockOverlayService.ACTION_DELAYED_LOCK
+        }
+        ContextCompat.startForegroundService(context, intent)
+    }
+
     override fun restoreNotification() {
         val intent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_RESTORE_NOTIFICATION
