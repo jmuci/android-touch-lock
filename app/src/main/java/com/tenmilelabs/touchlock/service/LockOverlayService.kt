@@ -31,6 +31,7 @@ class LockOverlayService : LifecycleService() {
             ACTION_START -> startLock()
             ACTION_STOP -> stopLock()
             ACTION_TOGGLE -> toggleLock()
+            ACTION_RESTORE_NOTIFICATION -> restoreNotification()
             ACTION_DISMISS -> dismissService()
             null -> {
                 // Service restarted by system (START_STICKY)
@@ -75,9 +76,8 @@ class LockOverlayService : LifecycleService() {
             stopLock()
         }
 
-        // Update notification to show unlock button
-        val notificationManagerSys = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManagerSys.notify(NOTIFICATION_ID, notificationManager.buildLockedNotification())
+        // Reassert foreground state with locked notification
+        assertForegroundState(notificationManager.buildLockedNotification())
 
         _lockState.value = LockState.Locked
     }
@@ -87,9 +87,8 @@ class LockOverlayService : LifecycleService() {
 
         overlayController.hide()
 
-        // Update notification to show lock button
-        val notificationManagerSys = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManagerSys.notify(NOTIFICATION_ID, notificationManager.buildUnlockedNotification())
+        // Reassert foreground state with unlocked notification
+        assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
     }
@@ -102,6 +101,44 @@ class LockOverlayService : LifecycleService() {
         when (_lockState.value) {
             LockState.Unlocked -> startLock()
             LockState.Locked -> stopLock()
+        }
+    }
+
+    /**
+     * Restores the notification if it was dismissed by the user.
+     * Called when the app comes to foreground to ensure notification visibility.
+     */
+    private fun restoreNotification() {
+        if (!isServiceRunning) {
+            initService()
+            return
+        }
+
+        // Reassert foreground state with current lock state's notification
+        val notification = when (_lockState.value) {
+            LockState.Locked -> notificationManager.buildLockedNotification()
+            LockState.Unlocked -> notificationManager.buildUnlockedNotification()
+        }
+
+        assertForegroundState(notification)
+    }
+
+    /**
+     * Helper method to consistently assert foreground state.
+     * Always use this instead of NotificationManager.notify() for foreground service notifications.
+     */
+    private fun assertForegroundState(notification: android.app.Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(
+                NOTIFICATION_ID,
+                notification
+            )
         }
     }
 
@@ -124,6 +161,7 @@ class LockOverlayService : LifecycleService() {
         const val ACTION_START = "com.tenmilelabs.touchlock.START"
         const val ACTION_STOP = "com.tenmilelabs.touchlock.STOP"
         const val ACTION_TOGGLE = "com.tenmilelabs.touchlock.TOGGLE"
+        const val ACTION_RESTORE_NOTIFICATION = "com.tenmilelabs.touchlock.RESTORE_NOTIFICATION"
         const val ACTION_DISMISS = "com.tenmilelabs.touchlock.DISMISS"
         const val NOTIFICATION_ID = 1
 

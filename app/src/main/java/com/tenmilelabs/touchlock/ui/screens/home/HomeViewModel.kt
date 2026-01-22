@@ -7,6 +7,7 @@ import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
+import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
@@ -26,6 +27,7 @@ class HomeViewModel @Inject constructor(
     private val startLock: StartLockUseCase,
     private val stopLock: StopLockUseCase,
     private val setOrientationMode: SetOrientationModeUseCase,
+    private val restoreNotification: RestoreNotificationUseCase,
     private val permissionManager: OverlayPermissionManager
 ) : ViewModel() {
 
@@ -51,9 +53,11 @@ class HomeViewModel @Inject constructor(
     /**
      * Checks and updates the overlay permission state.
      * Called when the app resumes to detect permission changes.
+     * Also restores the notification in case it was dismissed.
      */
     fun refreshPermissionState() {
         _hasOverlayPermission.value = permissionManager.hasPermission()
+        restoreNotification()
     }
 
     fun onEnableClicked() {

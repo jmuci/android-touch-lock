@@ -41,6 +41,7 @@ class LockNotificationManager @Inject constructor(
             .setSmallIcon(R.drawable.ic_lock_open_24)
             .setContentTitle("Touch Lock ready")
             .setContentText("Tap to lock")
+            .setOnlyAlertOnce(true)
             .setContentIntent(togglePendingIntent)
             .setOngoing(true)
             .build()
@@ -63,6 +64,7 @@ class LockNotificationManager @Inject constructor(
             .setContentTitle("Touch Lock active")
             .setContentText("Tap to unlock")
             .setContentIntent(togglePendingIntent)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
     }
