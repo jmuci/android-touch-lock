@@ -28,6 +28,7 @@ class LockOverlayService : LifecycleService() {
             ACTION_INIT -> initService()
             ACTION_START -> startLock()
             ACTION_STOP -> stopLock()
+            ACTION_TOGGLE -> toggleLock()
             ACTION_DISMISS -> dismissService()
             null -> {
                 // Service restarted by system (START_STICKY)
@@ -83,6 +84,17 @@ class LockOverlayService : LifecycleService() {
         _lockState.value = LockState.Unlocked
     }
 
+    /**
+     * Toggles lock state between locked and unlocked.
+     * Called when user taps the notification body.
+     */
+    private fun toggleLock() {
+        when (_lockState.value) {
+            LockState.Unlocked -> startLock()
+            LockState.Locked -> stopLock()
+        }
+    }
+
     private fun dismissService() {
         overlayController.hide()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -101,6 +113,7 @@ class LockOverlayService : LifecycleService() {
         const val ACTION_INIT = "com.tenmilelabs.touchlock.INIT"
         const val ACTION_START = "com.tenmilelabs.touchlock.START"
         const val ACTION_STOP = "com.tenmilelabs.touchlock.STOP"
+        const val ACTION_TOGGLE = "com.tenmilelabs.touchlock.TOGGLE"
         const val ACTION_DISMISS = "com.tenmilelabs.touchlock.DISMISS"
         const val NOTIFICATION_ID = 1
 

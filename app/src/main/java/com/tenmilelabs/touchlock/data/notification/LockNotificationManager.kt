@@ -26,52 +26,44 @@ class LockNotificationManager @Inject constructor(
     }
 
     fun buildUnlockedNotification(): Notification {
-        val startIntent = Intent(context, LockOverlayService::class.java).apply {
-            action = LockOverlayService.ACTION_START
+        val toggleIntent = Intent(context, LockOverlayService::class.java).apply {
+            action = LockOverlayService.ACTION_TOGGLE
         }
 
-        val startPendingIntent = PendingIntent.getService(
+        val togglePendingIntent = PendingIntent.getService(
             context,
             0,
-            startIntent,
+            toggleIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_open_24)
             .setContentTitle("Touch Lock ready")
-            //.setContentText("Tap to enable touch lock")
+            .setContentText("Tap to lock")
+            .setContentIntent(togglePendingIntent)
             .setOngoing(true)
-            .addAction(
-                R.drawable.ic_lock_24,
-                "Lock",
-                startPendingIntent
-            )
             .build()
     }
 
     fun buildLockedNotification(): Notification {
-        val stopIntent = Intent(context, LockOverlayService::class.java).apply {
-            action = LockOverlayService.ACTION_STOP
+        val toggleIntent = Intent(context, LockOverlayService::class.java).apply {
+            action = LockOverlayService.ACTION_TOGGLE
         }
 
-        val stopPendingIntent = PendingIntent.getService(
+        val togglePendingIntent = PendingIntent.getService(
             context,
             0,
-            stopIntent,
+            toggleIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_24)
             .setContentTitle("Touch Lock active")
-            //.setContentText("Touch input is disabled")
+            .setContentText("Tap to unlock")
+            .setContentIntent(togglePendingIntent)
             .setOngoing(true)
-            .addAction(
-                R.drawable.ic_lock_open_24,
-                "Unlock",
-                stopPendingIntent
-            )
             .build()
     }
 

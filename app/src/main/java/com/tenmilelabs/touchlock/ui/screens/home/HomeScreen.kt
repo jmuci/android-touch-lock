@@ -129,11 +129,11 @@ fun InstructionsCard(modifier: Modifier) {
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "3. Pull down the notification drawer and tap 'Lock' to block all touch input.",
+                text = "3. Pull down the notification drawer and tap the Touch Lock notification.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "4. To restore touch control, tap 'Unlock' in the notification.",
+                text = "4. One tap locks or unlocks instantly - no expansion needed!",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
