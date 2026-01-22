@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -90,12 +92,30 @@ private fun HomeScreenContent(
                 Text("Grant Permission")
             }
             return
+        }
+
+        // Show alert when lock is active
+        if (lockState == LockState.Locked) {
+            ActiveLockInstructionsCard(
+                modifier = Modifier.padding(vertical = 16.dp),
+                onDisableClicked = onDisableClicked
+            )
         } else {
-            InstructionsCard(Modifier.padding(vertical = 16.dp))
+            HowToUseCard(Modifier.padding(vertical = 16.dp))
             SettingsCard(
                 Modifier.padding(vertical = 16.dp),
                 onScreenRotationSettingChanged = anScreenRotationSettingChanged
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Quick lock button when unlocked
+            Button(
+                onClick = onEnableClicked,
+                modifier = Modifier.fillMaxWidth(0.6f)
+            ) {
+                Text("Lock")
+            }
         }
 
     }
@@ -103,7 +123,63 @@ private fun HomeScreenContent(
 
 
 @Composable
-fun InstructionsCard(modifier: Modifier) {
+fun ActiveLockInstructionsCard(
+    modifier: Modifier,
+    onDisableClicked: () -> Unit
+) {
+    Surface(
+        shadowElevation = 4.dp,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Image(
+                painter = rememberVectorPainter(Icons.Filled.Info),
+                contentDescription = "Information",
+                modifier = Modifier.size(48.dp)
+            )
+            Text(
+                text = "Touch Lock is Active!",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "You should now switch to the app you want to protect (e.g., YouTube, video call, etc.).",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "Touch input is currently disabled. Press Home or Recent Apps to switch apps.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = onDisableClicked,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.fillMaxWidth(0.7f)
+            ) {
+                Text("Unlock Now")
+            }
+        }
+    }
+}
+
+@Composable
+fun HowToUseCard(modifier: Modifier) {
     Surface(
         shadowElevation = 2.dp,
         shape = MaterialTheme.shapes.medium,
@@ -215,6 +291,17 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 onDisableClicked = {},
                 onRequestPermission = {},
                 anScreenRotationSettingChanged = {}
+            )
+        }
+    }
+
+    @Preview(showBackground = true, name = "Active Lock Card")
+    @Composable
+    private fun ActiveLockInstructionsCardPreview() {
+        MaterialTheme {
+            ActiveLockInstructionsCard(
+                modifier = Modifier.padding(16.dp),
+                onDisableClicked = {}
             )
         }
     }
