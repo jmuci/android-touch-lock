@@ -11,8 +11,10 @@ import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -43,8 +45,16 @@ class HomeViewModel @Inject constructor(
                 OrientationMode.FOLLOW_SYSTEM
             )
 
-    val hasOverlayPermission: Boolean
-        get() = permissionManager.hasPermission()
+    private val _hasOverlayPermission = MutableStateFlow(permissionManager.hasPermission())
+    val hasOverlayPermission: StateFlow<Boolean> = _hasOverlayPermission.asStateFlow()
+
+    /**
+     * Checks and updates the overlay permission state.
+     * Called when the app resumes to detect permission changes.
+     */
+    fun refreshPermissionState() {
+        _hasOverlayPermission.value = permissionManager.hasPermission()
+    }
 
     fun onEnableClicked() {
         startLock()
