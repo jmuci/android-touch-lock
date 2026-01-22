@@ -69,6 +69,28 @@ class LockNotificationManager @Inject constructor(
             .build()
     }
 
+    fun buildCountdownNotification(secondsRemaining: Int): Notification {
+        val cancelIntent = Intent(context, LockOverlayService::class.java).apply {
+            action = LockOverlayService.ACTION_CANCEL_COUNTDOWN
+        }
+
+        val cancelPendingIntent = PendingIntent.getService(
+            context,
+            0,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_lock_24)
+            .setContentTitle("Touch Lock countdown")
+            .setContentText("Locking in $secondsRemaining seconds...")
+            .setContentIntent(cancelPendingIntent)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .build()
+    }
+
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
