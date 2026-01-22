@@ -8,17 +8,31 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.widget.FrameLayout
 
+/**
+ * Full-screen overlay that blocks all touch input.
+ * Detects double-tap to show unlock handle.
+ * Detects long-press for direct unlock (legacy).
+ */
 class OverlayView(
     context: Context,
-    private val onUnlockRequested: () -> Unit
+    private val onUnlockRequested: () -> Unit,
+    private val onDoubleTapDetected: () -> Unit
 ) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
     private var longPressTriggered = false
 
+    // Double-tap detection
+    private var lastTapTime = 0L
+    private var tapCount = 0
+
     private val longPressRunnable = Runnable {
         longPressTriggered = true
         onUnlockRequested()
+    }
+
+    private val doubleTapResetRunnable = Runnable {
+        tapCount = 0
     }
 
     init {
@@ -33,6 +47,27 @@ class OverlayView(
             MotionEvent.ACTION_DOWN -> {
                 longPressTriggered = false
                 handler.postDelayed(longPressRunnable, LONG_PRESS_DURATION_MS)
+
+                // Detect double-tap
+                val currentTime = System.currentTimeMillis()
+                val timeSinceLastTap = currentTime - lastTapTime
+
+                if (timeSinceLastTap < DOUBLE_TAP_TIMEOUT_MS) {
+                    tapCount++
+                    if (tapCount >= 2) {
+                        // Double-tap detected!
+                        handler.removeCallbacks(doubleTapResetRunnable)
+                        handler.removeCallbacks(longPressRunnable)
+                        tapCount = 0
+                        onDoubleTapDetected()
+                    }
+                } else {
+                    tapCount = 1
+                }
+
+                lastTapTime = currentTime
+                handler.removeCallbacks(doubleTapResetRunnable)
+                handler.postDelayed(doubleTapResetRunnable, DOUBLE_TAP_TIMEOUT_MS)
             }
 
             MotionEvent.ACTION_UP,
@@ -43,7 +78,13 @@ class OverlayView(
         return true // Always consume touch
     }
 
+    fun cleanup() {
+        handler.removeCallbacks(longPressRunnable)
+        handler.removeCallbacks(doubleTapResetRunnable)
+    }
+
     companion object {
         private const val LONG_PRESS_DURATION_MS = 1500L
+        private const val DOUBLE_TAP_TIMEOUT_MS = 400L
     }
 }
