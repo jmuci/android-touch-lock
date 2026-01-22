@@ -23,6 +23,7 @@ class OverlayController @Inject constructor(
 
     private var overlayView: OverlayView? = null
     private var unlockHandleView: UnlockHandleView? = null
+    private var countdownOverlayView: CountdownOverlayView? = null
 
     private val hideHandleRunnable = Runnable {
         hideUnlockHandle()
@@ -42,7 +43,10 @@ class OverlayController @Inject constructor(
     }
 
     fun hide() {
-        // Clean up unlock handle first
+        // Clean up countdown overlay first
+        hideCountdownOverlay()
+
+        // Clean up unlock handle
         hideUnlockHandle()
         handler.removeCallbacks(hideHandleRunnable)
 
@@ -52,6 +56,37 @@ class OverlayController @Inject constructor(
             windowManager.removeView(it)
         }
         overlayView = null
+    }
+
+    /**
+     * Shows countdown overlay (non-blocking, displays timer).
+     */
+    fun showCountdownOverlay(initialSeconds: Int) {
+        // Remove existing countdown if present
+        hideCountdownOverlay()
+
+        countdownOverlayView = CountdownOverlayView(context).apply {
+            updateCountdown(initialSeconds)
+        }
+
+        windowManager.addView(countdownOverlayView, countdownLayoutParams())
+    }
+
+    /**
+     * Updates the countdown display.
+     */
+    fun updateCountdown(seconds: Int) {
+        countdownOverlayView?.updateCountdown(seconds)
+    }
+
+    /**
+     * Hides countdown overlay.
+     */
+    fun hideCountdownOverlay() {
+        countdownOverlayView?.let {
+            windowManager.removeView(it)
+        }
+        countdownOverlayView = null
     }
 
     private fun showUnlockHandle(onUnlockRequested: () -> Unit) {
@@ -99,6 +134,21 @@ class OverlayController @Inject constructor(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
+        }
+    }
+
+    private fun countdownLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, // IMPORTANT: Don't intercept touches
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER
+            x = 16 // 16dp from right
+            y = 100 // 100dp from top
         }
     }
 
