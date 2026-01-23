@@ -1,3 +1,32 @@
 <resources>
     <string name="app_name">Touch Lock</string>
+    
+    <!-- Home Screen -->
+    <string name="home_title">Touch Lock App</string>
+    <string name="home_description">Screen lock app for safe usage for kids or to prevent accidental touches.</string>
+    <string name="permission_message">Touch Lock needs permission to draw over other apps in order to block touch input.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="lock_in_10s">Lock in 10s</string>
+    
+    <!-- Active Lock Card -->
+    <string name="content_description_information">Information</string>
+    <string name="active_lock_title">Touch Lock is Active!</string>
+    <string name="active_lock_switch_instruction">You should switch to the app you want to protect (e.g., YouTube, video call, etc.) before locking the screen.</string>
+    <string name="active_lock_message">Touch input is currently disabled. Unlock Touch Lock from the notification to use the app again.</string>
+    
+    <!-- How to Use Card -->
+    <string name="how_to_use_title">How to Use</string>
+    <string name="how_to_use_step1">1. The Touch Lock notification is always available in your notification drawer.</string>
+    <string name="how_to_use_step2">2. Open your video, call, or any app you want to protect from accidental touches.</string>
+    <string name="how_to_use_step3">3. Pull down the notification drawer and tap the Touch Lock notification.</string>
+    <string name="how_to_use_step4">4. One tap locks or unlocks instantly - no expansion needed!</string>
+    
+    <!-- Settings Card -->
+    <string name="content_description_screen_rotation">Screen Rotation Settings</string>
+    <string name="screen_rotation">Screen Rotation</string>
+    <string name="change">Change</string>
+    <string name="notifications_disabled_warning">⚠️ Notifications Disabled</string>
+    <string name="notifications_disabled_availability">Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.</string>
+    <string name="notifications_availability_channel_blocked">The Touch Lock notification channel is blocked. Enable it to lock/unlock from the notification drawer.</string>
+    <string name="notifications_availability_enabled">Notifications are working correctly.</string>
 </resources>
