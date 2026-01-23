@@ -2,7 +2,7 @@ package com.tenmilelabs.touchlock.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tenmilelabs.touchlock.data.permission.OverlayPermissionManager
+import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase

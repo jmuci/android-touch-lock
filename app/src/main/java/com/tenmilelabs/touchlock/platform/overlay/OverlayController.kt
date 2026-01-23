@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.data.overlay
+package com.tenmilelabs.touchlock.platform.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
@@ -6,7 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
-import com.tenmilelabs.touchlock.data.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
+import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton

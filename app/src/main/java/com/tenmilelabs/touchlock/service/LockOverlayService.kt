@@ -1,7 +1,5 @@
 package com.tenmilelabs.touchlock.service
 
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -9,8 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.lifecycle.LifecycleService
-import com.tenmilelabs.touchlock.data.overlay.OverlayController
-import com.tenmilelabs.touchlock.data.permission.OverlayPermissionManager
+import com.tenmilelabs.touchlock.platform.overlay.OverlayController
+import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.notification.LockNotificationManager
 import dagger.hilt.android.AndroidEntryPoint

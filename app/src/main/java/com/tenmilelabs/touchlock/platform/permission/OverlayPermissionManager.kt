@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.data.permission
+package com.tenmilelabs.touchlock.platform.permission
 
 import android.content.Context
 import android.content.Intent

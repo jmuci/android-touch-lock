@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.data.datastore
+package com.tenmilelabs.touchlock.platform.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore

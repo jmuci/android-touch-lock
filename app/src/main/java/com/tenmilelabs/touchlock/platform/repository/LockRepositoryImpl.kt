@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.data.repository
+package com.tenmilelabs.touchlock.platform.repository
 
 import android.content.Context
 import android.content.Intent

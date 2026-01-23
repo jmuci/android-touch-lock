@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.data.overlay
+package com.tenmilelabs.touchlock.platform.overlay
 
 import android.annotation.SuppressLint
 import android.content.Context

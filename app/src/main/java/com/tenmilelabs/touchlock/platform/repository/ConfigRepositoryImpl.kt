@@ -1,6 +1,6 @@
-package com.tenmilelabs.touchlock.data.repository
+package com.tenmilelabs.touchlock.platform.repository
 
-import com.tenmilelabs.touchlock.data.datastore.LockPreferences
+import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import kotlinx.coroutines.flow.Flow
