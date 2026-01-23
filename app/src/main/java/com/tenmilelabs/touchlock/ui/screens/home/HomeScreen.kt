@@ -178,29 +178,18 @@ fun ActiveLockInstructionsCard(
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = "You should now switch to the app you want to protect (e.g., YouTube, video call, etc.).",
+                text = "You should switch to the app you want to protect (e.g., YouTube, video call, etc.) before locking the screen.",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = "Touch input is currently disabled. Press Home or Recent Apps to switch apps.",
+                text = "Touch input is currently disabled. Unlock Touch Lock from the notification to use the app again.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = onDisableClicked,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.fillMaxWidth(0.7f)
-            ) {
-                Text("Unlock Now")
-            }
         }
     }
 }
