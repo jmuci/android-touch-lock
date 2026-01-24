@@ -28,8 +28,8 @@ class LockOverlayService : LifecycleService() {
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
 
-    @Suppress("MissingSuperCall")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         Log.d("TouchLock", "onStartCommand called with action: ${intent?.action}")
         when (intent?.action) {
             ACTION_INIT -> initService()
