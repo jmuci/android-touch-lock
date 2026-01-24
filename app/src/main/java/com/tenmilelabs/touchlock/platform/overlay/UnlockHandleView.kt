@@ -66,7 +66,7 @@ class UnlockHandleView(
 
         // Add text
         val textView = TextView(context).apply {
-            text = "Press and\nhold to\nunlock"
+            text = context.getString(R.string.unlock_handle_press_and_hold_to_unlock)
             setTextColor(Color.WHITE)
             textSize = 16f
             gravity = Gravity.CENTER

@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.tenmilelabs.touchlock.R
 
 /**
  * A non-blocking overlay that displays countdown timer.
@@ -38,7 +39,7 @@ class CountdownOverlayView(context: Context) : LinearLayout(context) {
 
         // Label text
         val labelText = TextView(context).apply {
-            text = "Locking..."
+            text = context.getString(R.string.countdown_overlay_locking)
             textSize = 14f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -65,7 +66,7 @@ class CountdownOverlayView(context: Context) : LinearLayout(context) {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = dpToPx(16).toFloat()
-            setColor(Color.parseColor("#AA000000")) // More opaque than unlock handle
+            setColor(Color.parseColor(context.getString(R.string.transparent_black_AA))) // More opaque than unlock handle
         }
     }
 

@@ -29,4 +29,7 @@
     <string name="notifications_disabled_availability">Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.</string>
     <string name="notifications_availability_channel_blocked">The Touch Lock notification channel is blocked. Enable it to lock/unlock from the notification drawer.</string>
     <string name="notifications_availability_enabled">Notifications are working correctly.</string>
+    <string name="transparent_black_AA">#AA000000</string>
+    <string name="countdown_overlay_locking">Locking...</string>
+    <string name="unlock_handle_press_and_hold_to_unlock">Press and\nhold to\nunlock</string>
 </resources>
