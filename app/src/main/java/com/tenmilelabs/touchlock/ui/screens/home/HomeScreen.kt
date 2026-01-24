@@ -35,19 +35,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onRequestPermission: () -> Unit
+    onRequestOverlayPermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit
 ) {
     val lockState by viewModel.lockState.collectAsState()
     val hasOverlayPermission by viewModel.hasOverlayPermission.collectAsState()
+    val areNotificationsAvailable by viewModel.areNotificationsAvailable.collectAsState()
 
     // Refresh permission state when app resumes
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -66,10 +70,13 @@ fun HomeScreen(
     HomeScreenContent(
         lockState = lockState,
         hasOverlayPermission = hasOverlayPermission,
+        areNotificationsAvailable = areNotificationsAvailable,
+        notificationIssueDescription = viewModel.notificationIssueDescription,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
-        onRequestPermission = onRequestPermission,
+        onRequestOverlayPermission = onRequestOverlayPermission,
+        onRequestNotificationPermission = onRequestNotificationPermission,
         anScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged
     )
 }
@@ -78,10 +85,13 @@ fun HomeScreen(
 private fun HomeScreenContent(
     lockState: LockState,
     hasOverlayPermission: Boolean,
+    areNotificationsAvailable: Boolean,
+    notificationIssueDescription: String,
     onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
-    onRequestPermission: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit,
     anScreenRotationSettingChanged: (OrientationMode) -> Unit
 ) {
     Column(
@@ -93,11 +103,11 @@ private fun HomeScreenContent(
     ) {
 
         Text(
-            text = "Touch Lock App",
+            text = stringResource(R.string.home_title),
             style = MaterialTheme.typography.headlineMedium
         )
         Text(
-            text = "Screen lock app for safe usage for kids or to prevent accidental touches.",
+            text = stringResource(R.string.home_description),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -105,14 +115,24 @@ private fun HomeScreenContent(
         Spacer(modifier = Modifier.height(50.dp))
         if (!hasOverlayPermission) {
             Text(
-                text = "Touch Lock needs permission to draw over other apps in order to block touch input.",
-                modifier = Modifier.padding(vertical = 16.dp)
+                text = stringResource(R.string.permission_message),
+                modifier = Modifier.padding(vertical = 16.dp),
+                textAlign = TextAlign.Center
             )
 
-            Button(onClick = onRequestPermission) {
-                Text("Grant Permission")
+            Button(onClick = onRequestOverlayPermission) {
+                Text(stringResource(R.string.grant_permission))
             }
             return
+        }
+
+        // Show notification permission warning (if overlay is granted but notifications blocked)
+        if (!areNotificationsAvailable) {
+            NotificationWarningCard(
+                modifier = Modifier.padding(vertical = 16.dp),
+                description = notificationIssueDescription,
+                onFixClicked = onRequestNotificationPermission
+            )
         }
 
         // Show alert when lock is active
@@ -138,9 +158,11 @@ private fun HomeScreenContent(
 
                 Button(
                     onClick = onDelayedLockClicked,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
                 ) {
-                    Text("Lock in 10s")
+                    Text(stringResource(R.string.lock_in_10s))
                 }
             }
         }
@@ -169,27 +191,69 @@ fun ActiveLockInstructionsCard(
         ) {
             Image(
                 painter = rememberVectorPainter(Icons.Filled.Info),
-                contentDescription = "Information",
+                contentDescription = stringResource(R.string.content_description_information),
                 modifier = Modifier.size(48.dp)
             )
             Text(
-                text = "Touch Lock is Active!",
+                text = stringResource(R.string.active_lock_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = "You should switch to the app you want to protect (e.g., YouTube, video call, etc.) before locking the screen.",
+                text = stringResource(R.string.active_lock_switch_instruction),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = "Touch input is currently disabled. Unlock Touch Lock from the notification to use the app again.",
+                text = stringResource(R.string.active_lock_message),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
 
+        }
+    }
+}
+
+@Composable
+fun NotificationWarningCard(
+    modifier: Modifier,
+    description: String,
+    onFixClicked: () -> Unit
+) {
+    Surface(
+        shadowElevation = 3.dp,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.notifications_disabled_warning),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Button(
+                onClick = onFixClicked,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Enable Notifications")
+            }
         }
     }
 }
@@ -209,23 +273,23 @@ fun HowToUseCard(modifier: Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "How to Use",
+                text = stringResource(R.string.how_to_use_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "1. The Touch Lock notification is always available in your notification drawer.",
+                text = stringResource(R.string.how_to_use_step1),
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "2. Open your video, call, or any app you want to protect from accidental touches.",
+                text = stringResource(R.string.how_to_use_step2),
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "3. Pull down the notification drawer and tap the Touch Lock notification.",
+                text = stringResource(R.string.how_to_use_step3),
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "4. One tap locks or unlocks instantly - no expansion needed!",
+                text = stringResource(R.string.how_to_use_step4),
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -249,17 +313,17 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
         ) {
             Image(
                 painter = rememberVectorPainter(Icons.Filled.ScreenRotation),
-                contentDescription = "Screen Rotation Settings",
+                contentDescription = stringResource(R.string.content_description_screen_rotation),
                 modifier = Modifier.size(32.dp)
             )
             Text(
-                text = "Screen Rotation",
+                text = stringResource(R.string.screen_rotation),
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.size(20.dp))
             Box {
                 Button(onClick = { expanded = true }) {
-                    Text(text = "Change")
+                    Text(text = stringResource(R.string.change))
                 }
 
                 DropdownMenu(
@@ -288,10 +352,13 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
             HomeScreenContent(
                 lockState = LockState.Unlocked,
                 hasOverlayPermission = true,
+                areNotificationsAvailable = true,
+                notificationIssueDescription = "",
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
-                onRequestPermission = {},
+                onRequestOverlayPermission = {},
+                onRequestNotificationPermission = {},
                 anScreenRotationSettingChanged = {}
             )
         }
@@ -304,10 +371,13 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
             HomeScreenContent(
                 lockState = LockState.Locked,
                 hasOverlayPermission = true,
+                areNotificationsAvailable = true,
+                notificationIssueDescription = "",
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
-                onRequestPermission = {},
+                onRequestOverlayPermission = {},
+                onRequestNotificationPermission = {},
                 anScreenRotationSettingChanged = {}
             )
         }
@@ -331,10 +401,32 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
             HomeScreenContent(
                 lockState = LockState.Unlocked,
                 hasOverlayPermission = false,
+                areNotificationsAvailable = true,
+                notificationIssueDescription = "",
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
-                onRequestPermission = {},
+                onRequestOverlayPermission = {},
+                onRequestNotificationPermission = {},
+                anScreenRotationSettingChanged = {}
+            )
+        }
+    }
+
+    @Preview(showBackground = true, name = "Notifications Blocked")
+    @Composable
+    private fun HomeScreenNotificationsBlockedPreview() {
+        MaterialTheme {
+            HomeScreenContent(
+                lockState = LockState.Unlocked,
+                hasOverlayPermission = true,
+                areNotificationsAvailable = false,
+                notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
+                onEnableClicked = {},
+                onDisableClicked = {},
+                onDelayedLockClicked = {},
+                onRequestOverlayPermission = {},
+                onRequestNotificationPermission = {},
                 anScreenRotationSettingChanged = {}
             )
         }

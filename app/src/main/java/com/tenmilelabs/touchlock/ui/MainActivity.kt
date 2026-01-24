@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
 import com.tenmilelabs.touchlock.ui.screens.home.HomeScreen
@@ -14,7 +15,10 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject
-    lateinit var permissionManager: OverlayPermissionManager
+    lateinit var overlayPermissionManager: OverlayPermissionManager
+
+    @Inject
+    lateinit var notificationPermissionManager: NotificationPermissionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,8 +28,11 @@ class MainActivity : ComponentActivity() {
 
             HomeScreen(
                 viewModel = viewModel,
-                onRequestPermission = {
-                    startActivity(permissionManager.createSettingsIntent())
+                onRequestOverlayPermission = {
+                    startActivity(overlayPermissionManager.createSettingsIntent())
+                },
+                onRequestNotificationPermission = {
+                    startActivity(notificationPermissionManager.createNotificationSettingsIntent())
                 }
             )
         }

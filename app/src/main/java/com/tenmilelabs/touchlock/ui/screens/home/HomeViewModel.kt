@@ -2,6 +2,7 @@ package com.tenmilelabs.touchlock.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
@@ -30,7 +31,8 @@ class HomeViewModel @Inject constructor(
     private val startDelayedLock: StartDelayedLockUseCase,
     private val setOrientationMode: SetOrientationModeUseCase,
     private val restoreNotification: RestoreNotificationUseCase,
-    private val permissionManager: OverlayPermissionManager
+    private val overlayPermissionManager: OverlayPermissionManager,
+    private val notificationPermissionManager: NotificationPermissionManager
 ) : ViewModel() {
 
     val lockState: StateFlow<LockState> =
@@ -49,16 +51,23 @@ class HomeViewModel @Inject constructor(
                 OrientationMode.FOLLOW_SYSTEM
             )
 
-    private val _hasOverlayPermission = MutableStateFlow(permissionManager.hasPermission())
+    private val _hasOverlayPermission = MutableStateFlow(overlayPermissionManager.hasPermission())
     val hasOverlayPermission: StateFlow<Boolean> = _hasOverlayPermission.asStateFlow()
 
+    private val _areNotificationsAvailable = MutableStateFlow(notificationPermissionManager.areNotificationsAvailable())
+    val areNotificationsAvailable: StateFlow<Boolean> = _areNotificationsAvailable.asStateFlow()
+
+    val notificationIssueDescription: String
+        get() = notificationPermissionManager.getNotificationIssueDescription()
+
     /**
-     * Checks and updates the overlay permission state.
+     * Checks and updates permission states.
      * Called when the app resumes to detect permission changes.
      * Also restores the notification in case it was dismissed.
      */
     fun refreshPermissionState() {
-        _hasOverlayPermission.value = permissionManager.hasPermission()
+        _hasOverlayPermission.value = overlayPermissionManager.hasPermission()
+        _areNotificationsAvailable.value = notificationPermissionManager.areNotificationsAvailable()
         restoreNotification()
     }
 
