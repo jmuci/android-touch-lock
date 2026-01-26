@@ -52,6 +52,7 @@ fun HomeScreen(
     val lockState by viewModel.lockState.collectAsState()
     val hasOverlayPermission by viewModel.hasOverlayPermission.collectAsState()
     val areNotificationsAvailable by viewModel.areNotificationsAvailable.collectAsState()
+    val orientationMode by viewModel.orientationMode.collectAsState()
 
     // Refresh permission state when app resumes
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -72,6 +73,7 @@ fun HomeScreen(
         hasOverlayPermission = hasOverlayPermission,
         areNotificationsAvailable = areNotificationsAvailable,
         notificationIssueDescription = viewModel.notificationIssueDescription,
+        currentOrientationMode = orientationMode,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
@@ -87,6 +89,7 @@ private fun HomeScreenContent(
     hasOverlayPermission: Boolean,
     areNotificationsAvailable: Boolean,
     notificationIssueDescription: String,
+    currentOrientationMode: OrientationMode,
     onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
@@ -144,7 +147,8 @@ private fun HomeScreenContent(
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
             SettingsCard(
-                Modifier.padding(vertical = 16.dp),
+                modifier = Modifier.padding(vertical = 16.dp),
+                currentOrientationMode = currentOrientationMode,
                 onScreenRotationSettingChanged = anScreenRotationSettingChanged
             )
 
@@ -297,7 +301,11 @@ fun HowToUseCard(modifier: Modifier) {
 }
 
 @Composable
-fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (OrientationMode) -> Unit) {
+fun SettingsCard(
+    modifier: Modifier,
+    currentOrientationMode: OrientationMode,
+    onScreenRotationSettingChanged: (OrientationMode) -> Unit
+) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Surface(
         shadowElevation = 2.dp,
@@ -316,18 +324,26 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 contentDescription = stringResource(R.string.content_description_screen_rotation),
                 modifier = Modifier.size(32.dp)
             )
-            Text(
-                text = stringResource(R.string.screen_rotation),
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.size(20.dp))
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.screen_rotation),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = currentOrientationMode.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Box {
                 Button(onClick = { expanded = true }) {
                     Text(text = stringResource(R.string.change))
                 }
 
                 DropdownMenu(
-                    expanded = expanded, //
+                    expanded = expanded,
                     onDismissRequest = { expanded = false },
                 ) {
                     OrientationMode.entries.forEach { orientation ->
@@ -354,6 +370,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = true,
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
+                currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -373,6 +390,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = true,
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
+                currentOrientationMode = OrientationMode.PORTRAIT,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -403,6 +421,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = false,
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
+                currentOrientationMode = OrientationMode.LANDSCAPE,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -422,6 +441,7 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                 hasOverlayPermission = true,
                 areNotificationsAvailable = false,
                 notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
+                currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
