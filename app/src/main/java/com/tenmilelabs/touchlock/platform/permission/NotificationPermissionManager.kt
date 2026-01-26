@@ -7,7 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.tenmilelabs.touchlock.R
-import com.tenmilelabs.touchlock.notification.LockNotificationManager
+import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton

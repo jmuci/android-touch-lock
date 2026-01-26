@@ -10,7 +10,7 @@ import androidx.lifecycle.LifecycleService
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.notification.LockNotificationManager
+import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

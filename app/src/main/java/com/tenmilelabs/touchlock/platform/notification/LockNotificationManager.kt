@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.notification
+package com.tenmilelabs.touchlock.platform.notification
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.service.LockOverlayService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,6 +42,8 @@ class LockNotificationManager @Inject constructor(
             .setSmallIcon(R.drawable.ic_lock_open_24)
             .setContentTitle("Touch Lock ready")
             .setContentText("Tap to lock")
+            .setColor(ContextCompat.getColor(context, R.color.purple_200))
+            .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setContentIntent(togglePendingIntent)
             .setOngoing(true)
@@ -64,6 +67,8 @@ class LockNotificationManager @Inject constructor(
             .setContentTitle("Touch Lock active")
             .setContentText("Tap to unlock")
             .setContentIntent(togglePendingIntent)
+            .setColor(ContextCompat.getColor(context, R.color.purple_200))
+            .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
@@ -86,6 +91,8 @@ class LockNotificationManager @Inject constructor(
             .setContentTitle("Touch Lock countdown")
             .setContentText("Locking in $secondsRemaining seconds...")
             .setContentIntent(cancelPendingIntent)
+            .setColor(ContextCompat.getColor(context, R.color.purple_200))
+            .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
