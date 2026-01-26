@@ -15,6 +15,7 @@ kotlinxCoroutines = "1.10.2"
 kspVersion = "2.3.2"
 lifecycleRuntimeKtx = "2.10.0"
 lifecycleViewmodel = "2.10.0"
+mockk = "1.13.12"
 navigationCompose = "2.9.6"
 navigationUiKtx = "2.9.6"
 okhttp = "5.3.0"
@@ -59,6 +60,8 @@ androidx-navigation-ui-ktx = { group = "androidx.navigation", name = "navigation
 google-truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycleService" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }

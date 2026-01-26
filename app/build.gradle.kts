@@ -114,6 +114,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.google.truth)
     testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
     testImplementation(libs.hilt.android.testing)
     kspTest(libs.hilt.android.compiler)
 }
