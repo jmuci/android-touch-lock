@@ -49,10 +49,7 @@ fun HomeScreen(
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit
 ) {
-    val lockState by viewModel.lockState.collectAsState()
-    val hasOverlayPermission by viewModel.hasOverlayPermission.collectAsState()
-    val areNotificationsAvailable by viewModel.areNotificationsAvailable.collectAsState()
-    val orientationMode by viewModel.orientationMode.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     // Refresh permission state when app resumes
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -69,11 +66,11 @@ fun HomeScreen(
     }
 
     HomeScreenContent(
-        lockState = lockState,
-        hasOverlayPermission = hasOverlayPermission,
-        areNotificationsAvailable = areNotificationsAvailable,
+        lockState = uiState.lockState,
+        hasOverlayPermission = uiState.hasOverlayPermission,
+        areNotificationsAvailable = uiState.areNotificationsAvailable,
         notificationIssueDescription = viewModel.notificationIssueDescription,
-        currentOrientationMode = orientationMode,
+        currentOrientationMode = uiState.orientationMode,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,

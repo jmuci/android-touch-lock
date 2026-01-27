@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
-import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
@@ -17,7 +16,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,27 +34,31 @@ class HomeViewModel @Inject constructor(
     private val notificationPermissionManager: NotificationPermissionManager
 ) : ViewModel() {
 
-    val lockState: StateFlow<LockState> =
-        observeLockState()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5_000),
-                LockState.Unlocked
-            )
-
-    val orientationMode: StateFlow<OrientationMode> =
-        observeOrientationMode()
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5_000),
-                OrientationMode.FOLLOW_SYSTEM
-            )
-
+    // Private permission state flows
     private val _hasOverlayPermission = MutableStateFlow(overlayPermissionManager.hasPermission())
-    val hasOverlayPermission: StateFlow<Boolean> = _hasOverlayPermission.asStateFlow()
-
     private val _areNotificationsAvailable = MutableStateFlow(notificationPermissionManager.areNotificationsAvailable())
-    val areNotificationsAvailable: StateFlow<Boolean> = _areNotificationsAvailable.asStateFlow()
+
+    /**
+     * Single source of truth for UI state.
+     * Combines domain state (lock, orientation) with permission/capability checks.
+     */
+    val uiState: StateFlow<TouchLockUiState> = combine(
+        observeLockState(),
+        observeOrientationMode(),
+        _hasOverlayPermission,
+        _areNotificationsAvailable
+    ) { lockState, orientationMode, hasOverlayPermission, areNotificationsAvailable ->
+        TouchLockUiState(
+            lockState = lockState,
+            orientationMode = orientationMode,
+            hasOverlayPermission = hasOverlayPermission,
+            areNotificationsAvailable = areNotificationsAvailable
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = TouchLockUiState()
+    )
 
     val notificationIssueDescription: String
         get() = notificationPermissionManager.getNotificationIssueDescription()

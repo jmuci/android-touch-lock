@@ -74,86 +74,89 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `initial lockState is Unlocked`() = runTest {
-        viewModel.lockState.test {
-            assertThat(awaitItem()).isEqualTo(LockState.Unlocked)
+    fun `initial uiState has correct defaults`() = runTest {
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertThat(state.lockState).isEqualTo(LockState.Unlocked)
+            assertThat(state.orientationMode).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
+            assertThat(state.hasOverlayPermission).isFalse()
+            assertThat(state.areNotificationsAvailable).isFalse()
         }
     }
 
     @Test
-    fun `lockState reflects changes from repository`() = runTest {
-        viewModel.lockState.test {
-            assertThat(awaitItem()).isEqualTo(LockState.Unlocked)
+    fun `uiState lockState reflects changes from repository`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().lockState).isEqualTo(LockState.Unlocked)
 
             lockRepository.emitLockState(LockState.Locked)
             advanceUntilIdle()
-            assertThat(awaitItem()).isEqualTo(LockState.Locked)
+            assertThat(awaitItem().lockState).isEqualTo(LockState.Locked)
 
             lockRepository.emitLockState(LockState.Unlocked)
             advanceUntilIdle()
-            assertThat(awaitItem()).isEqualTo(LockState.Unlocked)
+            assertThat(awaitItem().lockState).isEqualTo(LockState.Unlocked)
         }
     }
 
     @Test
-    fun `initial orientationMode is FOLLOW_SYSTEM`() = runTest {
-        viewModel.orientationMode.test {
-            assertThat(awaitItem()).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
-        }
-    }
-
-    @Test
-    fun `orientationMode reflects changes from repository`() = runTest {
-        viewModel.orientationMode.test {
-            assertThat(awaitItem()).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
+    fun `uiState orientationMode reflects changes from repository`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
 
             configRepository.emitOrientationMode(OrientationMode.PORTRAIT)
             advanceUntilIdle()
-            assertThat(awaitItem()).isEqualTo(OrientationMode.PORTRAIT)
+            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.PORTRAIT)
 
             configRepository.emitOrientationMode(OrientationMode.LANDSCAPE)
             advanceUntilIdle()
-            assertThat(awaitItem()).isEqualTo(OrientationMode.LANDSCAPE)
+            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.LANDSCAPE)
         }
     }
 
     @Test
-    fun `initial hasOverlayPermission reflects permission manager state`() = runTest {
-        every { overlayPermissionManager.hasPermission() } returns true
-        val viewModelWithPermission = createViewModel()
-
-        viewModelWithPermission.hasOverlayPermission.test {
-            assertThat(awaitItem()).isTrue()
+    fun `uiState hasOverlayPermission reflects permission manager state when granted`() = runTest {
+        viewModel.uiState.test {
+            // Skip initial state
+            assertThat(awaitItem().hasOverlayPermission).isFalse()
+            
+            // Update mock and refresh
+            every { overlayPermissionManager.hasPermission() } returns true
+            viewModel.refreshPermissionState()
+            advanceUntilIdle()
+            
+            assertThat(awaitItem().hasOverlayPermission).isTrue()
         }
     }
 
     @Test
-    fun `initial hasOverlayPermission is false when permission not granted`() = runTest {
-        every { overlayPermissionManager.hasPermission() } returns false
-        val viewModelWithoutPermission = createViewModel()
-
-        viewModelWithoutPermission.hasOverlayPermission.test {
-            assertThat(awaitItem()).isFalse()
+    fun `uiState hasOverlayPermission is false when permission not granted`() = runTest {
+        viewModel.uiState.test {
+            // Default from setup is false
+            assertThat(awaitItem().hasOverlayPermission).isFalse()
         }
     }
 
     @Test
-    fun `initial areNotificationsAvailable reflects permission manager state`() = runTest {
-        every { notificationPermissionManager.areNotificationsAvailable() } returns true
-        val viewModelWithNotifications = createViewModel()
-
-        viewModelWithNotifications.areNotificationsAvailable.test {
-            assertThat(awaitItem()).isTrue()
+    fun `uiState areNotificationsAvailable reflects permission manager state when available`() = runTest {
+        viewModel.uiState.test {
+            // Skip initial state
+            assertThat(awaitItem().areNotificationsAvailable).isFalse()
+            
+            // Update mock and refresh
+            every { notificationPermissionManager.areNotificationsAvailable() } returns true
+            viewModel.refreshPermissionState()
+            advanceUntilIdle()
+            
+            assertThat(awaitItem().areNotificationsAvailable).isTrue()
         }
     }
 
     @Test
-    fun `initial areNotificationsAvailable is false when not available`() = runTest {
-        every { notificationPermissionManager.areNotificationsAvailable() } returns false
-        val viewModelWithoutNotifications = createViewModel()
-
-        viewModelWithoutNotifications.areNotificationsAvailable.test {
-            assertThat(awaitItem()).isFalse()
+    fun `uiState areNotificationsAvailable is false when not available`() = runTest {
+        viewModel.uiState.test {
+            // Default from setup is false
+            assertThat(awaitItem().areNotificationsAvailable).isFalse()
         }
     }
 
@@ -166,28 +169,28 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `refreshPermissionState updates overlay permission state`() = runTest {
-        viewModel.hasOverlayPermission.test {
-            assertThat(awaitItem()).isFalse()
+    fun `refreshPermissionState updates overlay permission in uiState`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().hasOverlayPermission).isFalse()
 
             every { overlayPermissionManager.hasPermission() } returns true
             viewModel.refreshPermissionState()
             advanceUntilIdle()
 
-            assertThat(awaitItem()).isTrue()
+            assertThat(awaitItem().hasOverlayPermission).isTrue()
         }
     }
 
     @Test
-    fun `refreshPermissionState updates notification availability state`() = runTest {
-        viewModel.areNotificationsAvailable.test {
-            assertThat(awaitItem()).isFalse()
+    fun `refreshPermissionState updates notification availability in uiState`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().areNotificationsAvailable).isFalse()
 
             every { notificationPermissionManager.areNotificationsAvailable() } returns true
             viewModel.refreshPermissionState()
             advanceUntilIdle()
 
-            assertThat(awaitItem()).isTrue()
+            assertThat(awaitItem().areNotificationsAvailable).isTrue()
         }
     }
 
@@ -246,27 +249,27 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `multiple permission refreshes update state correctly`() = runTest {
-        viewModel.hasOverlayPermission.test {
-            assertThat(awaitItem()).isFalse()
+    fun `multiple permission refreshes update uiState correctly`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().hasOverlayPermission).isFalse()
 
             // First refresh - grant permission
             every { overlayPermissionManager.hasPermission() } returns true
             viewModel.refreshPermissionState()
             advanceUntilIdle()
-            assertThat(awaitItem()).isTrue()
+            assertThat(awaitItem().hasOverlayPermission).isTrue()
 
             // Second refresh - revoke permission
             every { overlayPermissionManager.hasPermission() } returns false
             viewModel.refreshPermissionState()
             advanceUntilIdle()
-            assertThat(awaitItem()).isFalse()
+            assertThat(awaitItem().hasOverlayPermission).isFalse()
 
             // Third refresh - grant again
             every { overlayPermissionManager.hasPermission() } returns true
             viewModel.refreshPermissionState()
             advanceUntilIdle()
-            assertThat(awaitItem()).isTrue()
+            assertThat(awaitItem().hasOverlayPermission).isTrue()
         }
     }
 
