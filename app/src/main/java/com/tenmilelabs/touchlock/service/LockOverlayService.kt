@@ -7,13 +7,18 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
+import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -22,6 +27,7 @@ class LockOverlayService : LifecycleService() {
     @Inject lateinit var overlayController: OverlayController
     @Inject lateinit var notificationManager: LockNotificationManager
     @Inject lateinit var permissionManager: OverlayPermissionManager
+    @Inject lateinit var configRepository: ConfigRepository
 
     private val handler = Handler(Looper.getMainLooper())
     private var isServiceRunning = false
@@ -79,25 +85,57 @@ class LockOverlayService : LifecycleService() {
             return
         }
 
-        overlayController.show {
-            stopLock()
+        // Get current orientation mode and apply it
+        lifecycleScope.launch {
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
+                ?: OrientationMode.FOLLOW_SYSTEM
+            
+            // Start transparent orientation lock activity if orientation is locked
+            if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
+                val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
+                    this@LockOverlayService,
+                    orientationMode
+                )
+                startActivity(intent)
+                
+                // Small delay to let activity start before showing overlay
+                handler.postDelayed({
+                    overlayController.show(orientationMode) {
+                        stopLock()
+                    }
+                }, 100)
+            } else {
+                // No orientation locking needed, show overlay directly
+                overlayController.show(orientationMode) {
+                    stopLock()
+                }
+            }
+
+            // Reassert foreground state with locked notification
+            assertForegroundState(notificationManager.buildLockedNotification())
+
+            _lockState.value = LockState.Locked
         }
-
-        // Reassert foreground state with locked notification
-        assertForegroundState(notificationManager.buildLockedNotification())
-
-        _lockState.value = LockState.Locked
     }
 
     private fun stopLock() {
         if (_lockState.value == LockState.Unlocked) return
 
         overlayController.hide()
+        
+        // Finish orientation lock activity if it's running
+        finishOrientationLockActivity()
 
         // Reassert foreground state with unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
+    }
+    
+    private fun finishOrientationLockActivity() {
+        // Send broadcast to finish the activity
+        val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
+        sendBroadcast(intent)
     }
 
     /**
