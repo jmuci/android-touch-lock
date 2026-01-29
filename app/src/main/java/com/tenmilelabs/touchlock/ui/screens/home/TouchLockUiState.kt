@@ -18,11 +18,13 @@ import com.tenmilelabs.touchlock.domain.model.UsageTimerState
  * @property hasOverlayPermission Whether SYSTEM_ALERT_WINDOW permission is granted
  * @property areNotificationsAvailable Whether notifications are enabled and visible
  * @property usageTimer Daily usage timer state
+ * @property debugOverlayVisible Debug-only: Whether overlay has visible tint for lifecycle debugging
  */
 data class TouchLockUiState(
     val lockState: LockState = LockState.Unlocked,
     val orientationMode: OrientationMode = OrientationMode.FOLLOW_SYSTEM,
     val hasOverlayPermission: Boolean = false,
     val areNotificationsAvailable: Boolean = false,
-    val usageTimer: UsageTimerState = UsageTimerState.INITIAL
+    val usageTimer: UsageTimerState = UsageTimerState.INITIAL,
+    val debugOverlayVisible: Boolean = false
 )
