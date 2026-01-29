@@ -3,6 +3,8 @@ package com.tenmilelabs.touchlock.service
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.lifecycle.LifecycleService
 import com.tenmilelabs.touchlock.data.overlay.OverlayController
 import com.tenmilelabs.touchlock.data.permission.OverlayPermissionManager
@@ -42,10 +44,18 @@ class LockOverlayService : LifecycleService() {
     private fun initService() {
         if (isServiceRunning) return
 
-        startForeground(
-            NOTIFICATION_ID,
-            notificationManager.buildUnlockedNotification()
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notificationManager.buildUnlockedNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(
+                NOTIFICATION_ID,
+                notificationManager.buildUnlockedNotification()
+            )
+        }
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
     }
