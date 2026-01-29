@@ -7,6 +7,7 @@ import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
+import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
@@ -25,6 +26,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     observeLockState: ObserveLockStateUseCase,
     observeOrientationMode: ObserveOrientationModeUseCase,
+    observeUsageTimer: ObserveUsageTimerUseCase,
     private val startLock: StartLockUseCase,
     private val stopLock: StopLockUseCase,
     private val startDelayedLock: StartDelayedLockUseCase,
@@ -40,19 +42,21 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Single source of truth for UI state.
-     * Combines domain state (lock, orientation) with permission/capability checks.
+     * Combines domain state (lock, orientation, usage timer) with permission/capability checks.
      */
     val uiState: StateFlow<TouchLockUiState> = combine(
         observeLockState(),
         observeOrientationMode(),
         _hasOverlayPermission,
-        _areNotificationsAvailable
-    ) { lockState, orientationMode, hasOverlayPermission, areNotificationsAvailable ->
+        _areNotificationsAvailable,
+        observeUsageTimer()
+    ) { lockState, orientationMode, hasOverlayPermission, areNotificationsAvailable, usageTimer ->
         TouchLockUiState(
             lockState = lockState,
             orientationMode = orientationMode,
             hasOverlayPermission = hasOverlayPermission,
-            areNotificationsAvailable = areNotificationsAvailable
+            areNotificationsAvailable = areNotificationsAvailable,
+            usageTimer = usageTimer
         )
     }.stateIn(
         scope = viewModelScope,
