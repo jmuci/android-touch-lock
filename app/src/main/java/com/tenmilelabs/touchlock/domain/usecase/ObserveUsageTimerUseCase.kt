@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,8 +108,8 @@ class ObserveUsageTimerUseCase @Inject constructor(
 
             // Start tick job for real-time updates
             tickJob = scope.launch {
-                while (true) {
-                    delay(1000) // Update every second
+                while (isActive) { // isActive Returns true when the coroutine is still active. Available within coroutine scopes
+                    delay(1000) // Update every second and throws CancellationException if cancelled. This would be enough to cancel
 
                     // Check for midnight rollover
                     val today = getTodayDate()
