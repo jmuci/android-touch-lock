@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.ScreenRotation
@@ -99,10 +101,13 @@ private fun HomeScreenContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Add top spacing for better visual balance
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(
             text = stringResource(R.string.home_title),
@@ -114,7 +119,7 @@ private fun HomeScreenContent(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(50.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         if (!hasOverlayPermission) {
             Text(
                 text = stringResource(R.string.permission_message),
@@ -176,6 +181,8 @@ private fun HomeScreenContent(
             }
         }
 
+        // Add bottom spacing for better visual balance
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
