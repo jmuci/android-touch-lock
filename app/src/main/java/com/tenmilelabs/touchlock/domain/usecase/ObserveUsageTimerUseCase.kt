@@ -2,21 +2,21 @@ package com.tenmilelabs.touchlock.domain.usecase
 
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
+import com.tenmilelabs.touchlock.domain.repository.LockPreferencesRepository
 import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
+import com.tenmilelabs.touchlock.platform.time.TimeProvider
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,18 +27,32 @@ import javax.inject.Singleton
  * - Persistence of accumulated time
  * - Midnight rollover
  * - App restart recovery
+ *
+ * IMPORTANT: This class MUST remain a @Singleton to prevent memory leaks.
+ * It creates a CoroutineScope that lives for the lifetime of the instance and launches
+ * long-running coroutines that collect from repositories. If this were not a singleton,
+ * multiple instances would create uncancellable scopes that would leak memory and hold
+ * references to repositories indefinitely.
  */
 @Singleton
-class ObserveUsageTimerUseCase @Inject constructor(
+class ObserveUsageTimerUseCase(
     private val lockRepository: LockRepository,
-    private val lockPreferences: LockPreferences
+    private val lockPreferences: LockPreferencesRepository,
+    private val timeProvider: TimeProvider,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+    @Inject
+    constructor(
+        lockRepository: LockRepository,
+        lockPreferences: LockPreferencesRepository,
+        timeProvider: TimeProvider
+    ) : this(lockRepository, lockPreferences, timeProvider, Dispatchers.Default)
+    
+    private val scope = CoroutineScope(dispatcher + Job())
     
     private val _timerState = MutableStateFlow(UsageTimerState.INITIAL)
     private var tickJob: Job? = null
-    private var currentDate: String = getTodayDate()
+    private var currentDate: String = timeProvider.getCurrentDateString()
 
     init {
         // Observe lock state changes
@@ -60,7 +74,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
     operator fun invoke(): Flow<UsageTimerState> = _timerState
 
     private suspend fun loadTodayUsage() {
-        val today = getTodayDate()
+        val today = timeProvider.getCurrentDateString()
         val usageData = lockPreferences.getUsageData(today)
 
         if (usageData != null) {
@@ -68,7 +82,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
             val accumulatedMillis = usageData.accumulatedMillis
             val additionalMillis = if (usageData.lastStartTime != null) {
                 // Timer was running when app was killed, calculate elapsed time since then
-                System.currentTimeMillis() - usageData.lastStartTime
+                timeProvider.currentTimeMillis() - usageData.lastStartTime
             } else {
                 0L
             }
@@ -102,7 +116,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
 
         scope.launch {
             // Save start time immediately
-            saveUsageData(startTime = System.currentTimeMillis())
+            saveUsageData(startTime = timeProvider.currentTimeMillis())
 
             _timerState.value = _timerState.value.copy(isRunning = true)
 
@@ -112,7 +126,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
                     delay(1000) // Update every second and throws CancellationException if cancelled. This would be enough to cancel
 
                     // Check for midnight rollover
-                    val today = getTodayDate()
+                    val today = timeProvider.getCurrentDateString()
                     if (today != currentDate) {
                         // New day! Reset timer
                         currentDate = today
@@ -121,7 +135,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
                             isRunning = true
                         )
                         lockPreferences.clearUsageData()
-                        saveUsageData(startTime = System.currentTimeMillis())
+                        saveUsageData(startTime = timeProvider.currentTimeMillis())
                     } else {
                         // Increment elapsed time
                         _timerState.value = _timerState.value.copy(
@@ -147,7 +161,7 @@ class ObserveUsageTimerUseCase @Inject constructor(
         startTime: Long? = null,
         stopTime: Boolean = false
     ) {
-        val today = getTodayDate()
+        val today = timeProvider.getCurrentDateString()
         val currentState = _timerState.value
 
         val data = LockPreferences.UsageData(
@@ -163,7 +177,14 @@ class ObserveUsageTimerUseCase @Inject constructor(
         lockPreferences.updateUsageData(data)
     }
 
-    private fun getTodayDate(): String {
-        return dateFormat.format(Date())
+    /**
+     * Cancels all coroutines and cleans up resources.
+     * 
+     * FOR TESTING ONLY: This method should ONLY be called in test teardown to prevent
+     * scope leaks when creating multiple instances. In production, this class is a
+     * singleton and the scope should live for the app lifetime.
+     */
+    internal fun cancelForTesting() {
+        scope.cancel()
     }
 }
