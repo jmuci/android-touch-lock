@@ -27,7 +27,7 @@ class LockRepositoryImpl @Inject constructor(
         val intent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_STOP
         }
-        context.startService(intent)
+        ContextCompat.startForegroundService(context, intent)
     }
 
     override fun observeLockState(): Flow<LockState> {

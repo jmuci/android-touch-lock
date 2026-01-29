@@ -25,6 +25,31 @@ class LockNotificationManager @Inject constructor(
         createNotificationChannel()
     }
 
+    fun buildUnlockedNotification(): Notification {
+        val startIntent = Intent(context, LockOverlayService::class.java).apply {
+            action = LockOverlayService.ACTION_START
+        }
+
+        val startPendingIntent = PendingIntent.getService(
+            context,
+            0,
+            startIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_lock_open_24)
+            .setContentTitle("Touch Lock ready")
+            //.setContentText("Tap to enable touch lock")
+            .setOngoing(true)
+            .addAction(
+                R.drawable.ic_lock_24,
+                "Lock",
+                startPendingIntent
+            )
+            .build()
+    }
+
     fun buildLockedNotification(): Notification {
         val stopIntent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_STOP
@@ -40,7 +65,7 @@ class LockNotificationManager @Inject constructor(
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_24)
             .setContentTitle("Touch Lock active")
-            .setContentText("Touch input is disabled")
+            //.setContentText("Touch input is disabled")
             .setOngoing(true)
             .addAction(
                 R.drawable.ic_lock_open_24,

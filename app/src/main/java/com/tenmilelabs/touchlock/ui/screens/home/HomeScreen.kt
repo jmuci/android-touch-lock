@@ -121,16 +121,20 @@ fun InstructionsCard(modifier: Modifier) {
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "1. Open the video, call, or any other app in the foreground.",
-                style = MaterialTheme.typography.bodyLarge
+                text = "1. The Touch Lock notification is always available in your notification drawer.",
+                style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "2. Open the notification drawer and enable the Touch Lock app on the notification.",
-                style = MaterialTheme.typography.bodyLarge
+                text = "2. Open your video, call, or any app you want to protect from accidental touches.",
+                style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "3. To unlock, click on the notification again and disable Touch Lock.",
-                style = MaterialTheme.typography.bodyLarge
+                text = "3. Pull down the notification drawer and tap 'Lock' to block all touch input.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "4. To restore touch control, tap 'Unlock' in the notification.",
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }
@@ -170,13 +174,13 @@ fun SettingsCard(modifier: Modifier, onScreenRotationSettingChanged: (Orientatio
                     expanded = expanded, //
                     onDismissRequest = { expanded = false },
                 ) {
-                    OrientationMode.entries.forEach { orientation -> // Get all enum values
+                    OrientationMode.entries.forEach { orientation ->
                         DropdownMenuItem(
                             onClick = {
-                                onScreenRotationSettingChanged(orientation);
-                                { expanded = false }
+                                onScreenRotationSettingChanged(orientation)
+                                expanded = false
                             },
-                            text = { Text(text = orientation.title) } //
+                            text = { Text(text = orientation.title) }
                         )
                     }
                 }
