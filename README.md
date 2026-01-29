@@ -50,6 +50,9 @@ The app works fully **offline** and does not require an account or network acces
 
 5. Usage resets automatically at midnight
 
+> [!Known limitation]:
+>Some video call apps (e.g. WhatsApp) may automatically minimize the call to picture-in-picture when touch locking is enabled. This behavior is controlled by the calling app and cannot be overridden safely by Kids Touch Lock.
+
 ---
 
 ## 🚫 What This App Does _Not_ Do (by Design)

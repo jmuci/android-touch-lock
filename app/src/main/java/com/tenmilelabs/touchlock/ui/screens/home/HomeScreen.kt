@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -84,7 +85,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeScreenContent(
+internal fun HomeScreenContent(
     lockState: LockState,
     hasOverlayPermission: Boolean,
     areNotificationsAvailable: Boolean,
@@ -145,7 +146,9 @@ private fun HomeScreenContent(
         // Show alert when lock is active
         if (lockState == LockState.Locked) {
             ActiveLockInstructionsCard(
-                modifier = Modifier.padding(vertical = 16.dp),
+                modifier = Modifier
+                    .padding(vertical = 16.dp)
+                    .testTag("locked_state_indicator"),
                 onDisableClicked = onDisableClicked
             )
         } else {
@@ -175,6 +178,7 @@ private fun HomeScreenContent(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 8.dp)
+                        .testTag("lock_button")
                 ) {
                     Text(stringResource(R.string.lock_in_10s))
                 }
