@@ -34,6 +34,7 @@ class LockOverlayService : LifecycleService() {
     private var isServiceRunning = false
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
+    private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -73,6 +74,17 @@ class LockOverlayService : LifecycleService() {
         }
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
+        
+        // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
+        lifecycleScope.launch {
+            configRepository.observeDebugOverlayVisible().collect { visible ->
+                debugOverlayVisible = visible
+                // If overlay is currently shown and debug flag changed, recreate it
+                if (_lockState.value == LockState.Locked) {
+                    recreateOverlay()
+                }
+            }
+        }
     }
 
     private fun startLock() {
@@ -101,13 +113,13 @@ class LockOverlayService : LifecycleService() {
                 
                 // Small delay to let activity start before showing overlay
                 handler.postDelayed({
-                    overlayController.show(orientationMode) {
+                    overlayController.show(orientationMode, debugOverlayVisible) {
                         stopLock()
                     }
                 }, 100)
             } else {
                 // No orientation locking needed, show overlay directly
-                overlayController.show(orientationMode) {
+                overlayController.show(orientationMode, debugOverlayVisible) {
                     stopLock()
                 }
             }
@@ -137,6 +149,22 @@ class LockOverlayService : LifecycleService() {
         // Send broadcast to finish the activity
         val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
         sendBroadcast(intent)
+    }
+
+    /**
+     * Debug-only: Recreates the overlay to apply new debug settings.
+     * Used when debug overlay visibility flag changes while locked.
+     */
+    private fun recreateOverlay() {
+        lifecycleScope.launch {
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
+                ?: OrientationMode.FOLLOW_SYSTEM
+            
+            overlayController.hide()
+            overlayController.show(orientationMode, debugOverlayVisible) {
+                stopLock()
+            }
+        }
     }
 
     /**

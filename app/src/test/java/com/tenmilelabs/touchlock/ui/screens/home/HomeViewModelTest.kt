@@ -5,10 +5,12 @@ import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
+import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
@@ -82,7 +84,9 @@ class HomeViewModelTest {
             setOrientationMode = SetOrientationModeUseCase(configRepository),
             restoreNotification = RestoreNotificationUseCase(lockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(configRepository),
+            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(configRepository)
         )
     }
 
@@ -303,15 +307,19 @@ class HomeViewModelTest {
         setOrientationMode = SetOrientationModeUseCase(configRepository),
         restoreNotification = RestoreNotificationUseCase(lockRepository),
         overlayPermissionManager = overlayPermissionManager,
-        notificationPermissionManager = notificationPermissionManager
+        notificationPermissionManager = notificationPermissionManager,
+        observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(configRepository),
+        setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(configRepository)
     )
 
     // Fake implementations for testing
 
     private class FakeConfigRepository : ConfigRepository {
         private val orientationModeFlow = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
-        
+
+        private val debugOverlayVisibleFlow = MutableStateFlow(false)
         var setOrientationModeCallCount = 0
+
         var lastOrientationMode: OrientationMode? = null
 
         override fun observeOrientationMode(): Flow<OrientationMode> = orientationModeFlow
@@ -320,6 +328,14 @@ class HomeViewModelTest {
             setOrientationModeCallCount++
             lastOrientationMode = mode
             orientationModeFlow.value = mode
+        }
+
+        override fun observeDebugOverlayVisible(): Flow<Boolean> {
+            return debugOverlayVisibleFlow
+        }
+
+        override suspend fun setDebugOverlayVisible(visible: Boolean) {
+            debugOverlayVisibleFlow.value = visible
         }
 
         fun emitOrientationMode(mode: OrientationMode) {

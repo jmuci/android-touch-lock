@@ -45,7 +45,9 @@ class HomeScreenTest {
                     onDelayedLockClicked = { lockStateFlow.value = LockState.Locked },
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
-                    anScreenRotationSettingChanged = {}
+                    anScreenRotationSettingChanged = {},
+                    onDebugOverlayVisibleChanged = {},
+                    debugOverlayVisible = false
                 )
             }
         }

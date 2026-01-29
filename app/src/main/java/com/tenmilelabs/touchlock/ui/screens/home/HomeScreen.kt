@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -42,6 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.tenmilelabs.touchlock.BuildConfig
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
@@ -76,12 +78,14 @@ fun HomeScreen(
         notificationIssueDescription = viewModel.notificationIssueDescription,
         currentOrientationMode = uiState.orientationMode,
         usageTimer = uiState.usageTimer,
+        debugOverlayVisible = uiState.debugOverlayVisible,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
-        anScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged
+        anScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged,
+        onDebugOverlayVisibleChanged = viewModel::onDebugOverlayVisibleChanged
     )
 }
 
@@ -93,12 +97,14 @@ internal fun HomeScreenContent(
     notificationIssueDescription: String,
     currentOrientationMode: OrientationMode,
     usageTimer: UsageTimerState,
+    debugOverlayVisible: Boolean,
     onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
-    anScreenRotationSettingChanged: (OrientationMode) -> Unit
+    anScreenRotationSettingChanged: (OrientationMode) -> Unit,
+    onDebugOverlayVisibleChanged: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -210,6 +216,15 @@ internal fun HomeScreenContent(
                     Text(stringResource(R.string.lock_in_10s))
                 }
             }
+        }
+
+        // Debug-only: Overlay visibility toggle (for diagnosing overlay lifecycle issues)
+        if (BuildConfig.DEBUG) {
+            DebugOverlayCard(
+                modifier = Modifier.padding(vertical = 16.dp),
+                isVisible = debugOverlayVisible,
+                onVisibilityChanged = onDebugOverlayVisibleChanged
+            )
         }
 
         // Add bottom spacing for better visual balance
@@ -449,6 +464,48 @@ private fun formatTime(millis: Long): String {
     return "${minutes}m ${seconds}s"
 }
 
+/**
+ * Debug-only card for toggling overlay visibility.
+ * Used to visually confirm when the overlay is attached (for diagnosing lifecycle issues).
+ */
+@Composable
+fun DebugOverlayCard(
+    modifier: Modifier,
+    isVisible: Boolean,
+    onVisibilityChanged: (Boolean) -> Unit
+) {
+    Surface(
+        shadowElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "🐞 Debug: Overlay Visible",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "Shows red tint when overlay is attached",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isVisible,
+                onCheckedChange = onVisibilityChanged
+            )
+        }
+    }
+}
+
     @Preview(showBackground = true, name = "Unlocked State")
     @Composable
     private fun HomeScreenUnlockedPreview() {
@@ -460,12 +517,14 @@ private fun formatTime(millis: Long): String {
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
+                debugOverlayVisible = false,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {}
+                anScreenRotationSettingChanged = {},
+                onDebugOverlayVisibleChanged = {}
             )
         }
     }
@@ -481,12 +540,14 @@ private fun formatTime(millis: Long): String {
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.PORTRAIT,
                 usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
+                debugOverlayVisible = false,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {}
+                anScreenRotationSettingChanged = {},
+                onDebugOverlayVisibleChanged = {}
             )
         }
     }
@@ -513,12 +574,14 @@ private fun formatTime(millis: Long): String {
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.LANDSCAPE,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
+                debugOverlayVisible = false,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {}
+                anScreenRotationSettingChanged = {},
+                onDebugOverlayVisibleChanged = {}
             )
         }
     }
@@ -534,12 +597,14 @@ private fun formatTime(millis: Long): String {
                 notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
+                debugOverlayVisible = false,
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {}
+                anScreenRotationSettingChanged = {},
+                onDebugOverlayVisibleChanged = {}
             )
         }
     }

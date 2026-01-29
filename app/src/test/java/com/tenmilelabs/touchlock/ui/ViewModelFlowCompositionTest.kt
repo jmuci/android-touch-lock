@@ -5,10 +5,12 @@ import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
+import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
@@ -99,7 +101,9 @@ class ViewModelFlowCompositionTest {
             setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(fakeConfigRepository),
+            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(fakeConfigRepository)
         )
     }
 
@@ -227,7 +231,9 @@ class ViewModelFlowCompositionTest {
             setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(fakeConfigRepository),
+            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(fakeConfigRepository)
         )
 
         // Allow ViewModel flow combination to complete
@@ -303,11 +309,20 @@ class ViewModelFlowCompositionTest {
 
     private class FakeConfigRepository : ConfigRepository {
         private val orientationMode = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
+        private val debugOverlayVisibleFlow = MutableStateFlow(false)
 
         override fun observeOrientationMode(): Flow<OrientationMode> = orientationMode
 
         override suspend fun setOrientationMode(mode: OrientationMode) {
             orientationMode.value = mode
+        }
+
+        override fun observeDebugOverlayVisible(): Flow<Boolean> {
+            return debugOverlayVisibleFlow
+        }
+
+        override suspend fun setDebugOverlayVisible(visible: Boolean) {
+            debugOverlayVisibleFlow.value = visible
         }
     }
 }

@@ -19,4 +19,12 @@ class ConfigRepositoryImpl @Inject constructor(
     override suspend fun setOrientationMode(mode: OrientationMode) {
         lockPreferences.setOrientationMode(mode)
     }
+
+    override fun observeDebugOverlayVisible(): Flow<Boolean> {
+        return lockPreferences.debugOverlayVisible
+    }
+
+    override suspend fun setDebugOverlayVisible(visible: Boolean) {
+        lockPreferences.setDebugOverlayVisible(visible)
+    }
 }

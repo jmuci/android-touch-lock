@@ -12,11 +12,14 @@ import android.widget.FrameLayout
  * Full-screen overlay that blocks all touch input.
  * Detects double-tap to show unlock handle.
  * Detects long-press for direct unlock (legacy).
+ * 
+ * @param debugTintVisible Debug-only: When true, applies a visible tint to confirm overlay is attached
  */
 class OverlayView(
     context: Context,
     private val onUnlockRequested: () -> Unit,
-    private val onDoubleTapDetected: () -> Unit
+    private val onDoubleTapDetected: () -> Unit,
+    debugTintVisible: Boolean = false
 ) : FrameLayout(context) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -36,7 +39,12 @@ class OverlayView(
     }
 
     init {
-        setBackgroundColor(Color.TRANSPARENT)
+        // Debug-only: Apply visible tint to confirm overlay is attached (for lifecycle debugging)
+        if (debugTintVisible) {
+            setBackgroundColor(Color.argb(13, 255, 0, 0)) // ~5% red tint
+        } else {
+            setBackgroundColor(Color.TRANSPARENT)
+        }
         isClickable = true
         isFocusable = false
     }
