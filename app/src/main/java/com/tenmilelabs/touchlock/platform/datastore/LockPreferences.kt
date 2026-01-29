@@ -3,6 +3,7 @@ package com.tenmilelabs.touchlock.platform.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -29,6 +30,8 @@ class LockPreferences @Inject constructor(
         val USAGE_DATE = stringPreferencesKey("usage_date") // Format: yyyy-MM-dd
         val USAGE_ACCUMULATED_MILLIS = longPreferencesKey("usage_accumulated_millis")
         val USAGE_LAST_START_TIME = longPreferencesKey("usage_last_start_time")
+        // Debug-only: Makes overlay visible for lifecycle debugging
+        val DEBUG_OVERLAY_VISIBLE = booleanPreferencesKey("debug_overlay_visible")
     }
 
     override val orientationMode: Flow<OrientationMode> = dataStore.data
@@ -40,6 +43,19 @@ class LockPreferences @Inject constructor(
     override suspend fun setOrientationMode(mode: OrientationMode) {
         dataStore.edit { preferences ->
             preferences[Keys.ORIENTATION_MODE] = mode.name
+        }
+    }
+
+    // Debug-only: Observe overlay visibility setting (for debugging overlay lifecycle issues)
+    val debugOverlayVisible: Flow<Boolean> = dataStore.data
+        .map { preferences ->
+            preferences[Keys.DEBUG_OVERLAY_VISIBLE] ?: false
+        }
+
+    // Debug-only: Toggle overlay visibility for lifecycle debugging
+    suspend fun setDebugOverlayVisible(visible: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[Keys.DEBUG_OVERLAY_VISIBLE] = visible
         }
     }
 
