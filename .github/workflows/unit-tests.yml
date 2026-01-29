@@ -6,6 +6,11 @@ on:
   push:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
   test:
     name: Run Unit Tests
@@ -43,14 +48,15 @@ jobs:
         with:
           name: test-results
           path: |
-            **/build/test-results/test/**/*.xml
-            **/build/reports/tests/test/**
+            **/build/test-results/**/*.xml
+            **/build/reports/tests/**
           retention-days: 7
       
       - name: Publish test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: '**/build/test-results/test/**/*.xml'
+          files: |
+            **/build/test-results/**/*.xml
           check_name: 'Unit Test Results'
           comment_title: 'Unit Test Results'
