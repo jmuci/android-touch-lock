@@ -24,6 +24,8 @@ The app works fully **offline** and does not require an account or network acces
 - 🔔 **Quick activation via persistent notification**
     
 - 🔄 **Orientation control** (portrait, landscape, or follow system)
+
+- ⏱ **Daily Usage Tracking** – Tracks how long the lock has been active today
     
 - 🔓 **Safe unlock gesture** (intentional long-press)
     
@@ -34,6 +36,19 @@ The app works fully **offline** and does not require an account or network acces
 
 > Touch Lock does **not** attempt to be a full parental control or kiosk app.  
 > It focuses on a single, well-defined problem: temporarily disabling touch input.
+---
+
+## How It Works
+
+1. Parent starts a video or app
+
+2. Enables Kids Touch Lock via notification or app UI
+
+3. Overlay intercepts all touch events
+
+4. Usage timer runs only while lock is enabled
+
+5. Usage resets automatically at midnight
 
 ---
 
@@ -50,6 +65,11 @@ The app works fully **offline** and does not require an account or network acces
 
 These constraints are intentional and align with Android platform and Play Store best practices.
 
+---
+
+## Learnings and Trade Offs
+
+- See this dedicated document [learnings](docs/learnings.md)
 ---
 
 ## 🏗️ Architecture Overview
@@ -83,8 +103,16 @@ Foreground Service + Overlay Runtime
     
 - **Offline-first**:  
     No network dependencies; configuration is stored locally.
-    
 
+---
+
+## Notes
+
+- No user data is collected
+
+- No network access
+
+- Designed to be battery‑efficient
 ---
 
 ## 🧩 Main Components
@@ -92,9 +120,7 @@ Foreground Service + Overlay Runtime
 ### UI Layer
 
 - **Jetpack Compose** for all screens
-    
-- **Navigation Compose** for simple in-app navigation
-    
+     
 - **ViewModels + StateFlow** for reactive state handling
     
 
@@ -118,8 +144,9 @@ Foreground Service + Overlay Runtime
     - Orientation mode
         
     - Unlock configuration
+
+    - Usage time
         
-- No database required for MVP
     
 
 ### Dependency Injection
@@ -135,7 +162,13 @@ Foreground Service + Overlay Runtime
 
 ## 🔐 Permissions & Privacy
 
-Touch Lock requests **only one special permission**:
+Touch Lock requests:
+
+- SYSTEM_ALERT_WINDOW – Required for touch overlay
+
+- FOREGROUND_SERVICE – Required for persistent lock
+
+It also requests for notifications to be enabled for the App.
 
 ### Draw over other apps
 
@@ -152,35 +185,14 @@ Permission usage is clearly explained in the UI before redirecting to system set
 
 ---
 
-## 🛠️ Tech Stack
-
-- **Kotlin**
-    
-- **Jetpack Compose**
-    
-- **StateFlow / Coroutines**
-    
-- **Hilt**
-    
-- **DataStore**
-    
-- **Foreground Service**
-    
-- **WindowManager overlays**
-    
-
-Minimum SDK and target SDK follow current Android recommendations.
-
----
-
 ## 📦 Project Structure (Simplified)
 
 ```
 ui/            → Compose UI, ViewModels, navigation
 domain/        → Models, use cases, repository interfaces
-data/          → Repository implementations, DataStore
-overlay/       → Foreground service, overlay controller, view
-notification/  → Notification management
+platform/      → Repository implementations, DataStore, Overlays, Permissions, Time,
+platform/notification/  → Notification management
+service/       → Foreground service
 permission/    → Overlay permission handling
 di/            → Hilt modules
 ```
@@ -190,9 +202,7 @@ di/            → Hilt modules
 ## 🔮 Future Enhancements (Out of Scope for MVP)
 
 - PIN or pattern-based unlock
-    
-- Accessibility-assisted gesture detection (with explicit justification)
-    
+     
 - Usage statistics
     
 - App pinning detection and guidance
