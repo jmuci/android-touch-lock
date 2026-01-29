@@ -3,6 +3,7 @@ package com.tenmilelabs.touchlock.ui.screens.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -108,7 +109,7 @@ internal fun HomeScreenContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Add top spacing for better visual balance
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = stringResource(R.string.home_title),
@@ -153,17 +154,43 @@ internal fun HomeScreenContent(
             )
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
-            SettingsCard(
-                modifier = Modifier.padding(vertical = 16.dp),
-                currentOrientationMode = currentOrientationMode,
-                onScreenRotationSettingChanged = anScreenRotationSettingChanged
-            )
-            
-            // Usage Timer Card
-            UsageTimerCard(
-                modifier = Modifier.padding(vertical = 16.dp),
-                usageTimer = usageTimer
-            )
+
+            // Adaptive layout: vertical in portrait, horizontal in landscape
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val isWideLayout = maxWidth >= 600.dp
+                
+                if (isWideLayout) {
+                    // Landscape: Three cards side-by-side
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            currentOrientationMode = currentOrientationMode,
+                            onScreenRotationSettingChanged = anScreenRotationSettingChanged
+                        )
+                        UsageTimerCard(
+                            modifier = Modifier.weight(1f),
+                            usageTimer = usageTimer
+                        )
+                    }
+                } else {
+                    // Portrait: Three cards stacked vertically
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HowToUseCard(Modifier.padding(vertical = 16.dp))
+                        SettingsCard(
+                            modifier = Modifier.padding(vertical = 16.dp),
+                            currentOrientationMode = currentOrientationMode,
+                            onScreenRotationSettingChanged = anScreenRotationSettingChanged
+                        )
+                        UsageTimerCard(
+                            modifier = Modifier.padding(vertical = 16.dp),
+                            usageTimer = usageTimer
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
