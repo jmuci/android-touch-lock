@@ -6,10 +6,9 @@ import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
+import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -82,7 +81,7 @@ class UsageTimerIntegrationTest {
             assertThat(awaitItem().elapsedMillisToday).isEqualTo(0L)
 
             // First lock session: 5 seconds
-            fakeLockRepository.setLockState(LockState.Locked)
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100) // Allow state to propagate
             assertThat(awaitItem().isRunning).isTrue()
             
@@ -96,7 +95,7 @@ class UsageTimerIntegrationTest {
             }
 
             // Unlock - stops timer but preserves accumulated time
-            fakeLockRepository.setLockState(LockState.Unlocked)
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             val afterFirstUnlock = awaitItem()
             assertThat(afterFirstUnlock.isRunning).isFalse()
@@ -108,7 +107,7 @@ class UsageTimerIntegrationTest {
             expectNoEvents() // No updates while unlocked
 
             // Second lock session: 3 seconds (should add to previous 5)
-            fakeLockRepository.setLockState(LockState.Locked)
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             val afterSecondLock = awaitItem()
             assertThat(afterSecondLock.isRunning).isTrue()
@@ -122,7 +121,7 @@ class UsageTimerIntegrationTest {
             }
 
             // Unlock again
-            fakeLockRepository.setLockState(LockState.Unlocked)
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             val finalState = awaitItem()
             assertThat(finalState.isRunning).isFalse()
@@ -150,7 +149,7 @@ class UsageTimerIntegrationTest {
             // Start with some accumulated time on Day 1
             assertThat(awaitItem().elapsedMillisToday).isEqualTo(0L)
 
-            fakeLockRepository.setLockState(LockState.Locked)
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             assertThat(awaitItem().isRunning).isTrue()
 
@@ -189,7 +188,7 @@ class UsageTimerIntegrationTest {
             
             // Stop timer to clean up
 
-            fakeLockRepository.setLockState(LockState.Unlocked)
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             awaitItem()
         }
@@ -209,7 +208,7 @@ class UsageTimerIntegrationTest {
         observeUsageTimer().test {
             awaitItem() // Initial state
             
-            fakeLockRepository.setLockState(LockState.Locked)
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             awaitItem() // Lock started
 
@@ -217,7 +216,7 @@ class UsageTimerIntegrationTest {
             advanceTimeBy(3000)
             repeat(3) { awaitItem() } // Consume ticks
 
-            fakeLockRepository.setLockState(LockState.Unlocked)
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             val beforeRestart = awaitItem()
             assertThat(beforeRestart.elapsedMillisToday).isEqualTo(3000L)
@@ -244,7 +243,7 @@ class UsageTimerIntegrationTest {
             assertThat(restored.isRunning).isFalse()
 
             // Continue accumulating
-            fakeLockRepository.setLockState(LockState.Locked)
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             assertThat(awaitItem().isRunning).isTrue()
 
@@ -254,41 +253,12 @@ class UsageTimerIntegrationTest {
                 val state = awaitItem()
                 assertThat(state.elapsedMillisToday).isEqualTo(3000L + (it + 1) * 1000L)
             }
-            fakeLockRepository.setLockState(LockState.Unlocked)
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             awaitItem()
         }
         
         // Clean up the second instance
         restoredUsageTimer.cancelForTesting()
-    }
-
-    /**
-     * Fake repository that allows tests to control lock state.
-     */
-    private class FakeLockRepository : LockRepository {
-        private val lockState = MutableStateFlow<LockState>(LockState.Unlocked)
-
-        override fun observeLockState(): Flow<LockState> = lockState
-
-        override fun startLock() {
-            lockState.value = LockState.Locked
-        }
-
-        override fun stopLock() {
-            lockState.value = LockState.Unlocked
-        }
-
-        override fun startDelayedLock() {
-            // Not needed for these tests
-        }
-
-        override fun restoreNotification() {
-            // Not needed for these tests
-        }
-
-        fun setLockState(state: LockState) {
-            lockState.value = state
-        }
     }
 }

@@ -5,14 +5,17 @@ import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
-import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
+import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
+import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
+import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
+import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import io.mockk.every
@@ -36,6 +39,9 @@ class HomeViewModelTest {
     private lateinit var viewModel: HomeViewModel
     private lateinit var lockRepository: FakeLockRepository
     private lateinit var configRepository: FakeConfigRepository
+    private lateinit var fakeLockPreferences: FakeLockPreferences
+    private lateinit var fakeClock: FakeClock
+    private lateinit var observeUsageTimerUseCase: ObserveUsageTimerUseCase
     private lateinit var overlayPermissionManager: OverlayPermissionManager
     private lateinit var notificationPermissionManager: NotificationPermissionManager
 
@@ -45,8 +51,11 @@ class HomeViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        lockRepository = FakeLockRepository()
+        lockRepository = FakeLockRepository(autoUpdateState = false)
         configRepository = FakeConfigRepository()
+        fakeLockPreferences = FakeLockPreferences()
+        fakeClock = FakeClock()
+        fakeClock.setDate("2024-01-15")
         overlayPermissionManager = mockk(relaxed = true)
         notificationPermissionManager = mockk(relaxed = true)
 
@@ -55,9 +64,18 @@ class HomeViewModelTest {
         every { notificationPermissionManager.areNotificationsAvailable() } returns false
         every { notificationPermissionManager.getNotificationIssueDescription() } returns ""
 
+        // Create and store the ObserveUsageTimerUseCase to clean it up later
+        observeUsageTimerUseCase = ObserveUsageTimerUseCase(
+            lockRepository, 
+            fakeLockPreferences, 
+            fakeClock, 
+            testDispatcher
+        )
+
         viewModel = HomeViewModel(
             observeLockState = ObserveLockStateUseCase(lockRepository),
             observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
+            observeUsageTimer = observeUsageTimerUseCase,
             startLock = StartLockUseCase(lockRepository),
             stopLock = StopLockUseCase(lockRepository),
             startDelayedLock = StartDelayedLockUseCase(lockRepository),
@@ -70,6 +88,7 @@ class HomeViewModelTest {
 
     @After
     fun tearDown() {
+        observeUsageTimerUseCase.cancelForTesting()
         Dispatchers.resetMain()
     }
 
@@ -90,12 +109,12 @@ class HomeViewModelTest {
             assertThat(awaitItem().lockState).isEqualTo(LockState.Unlocked)
 
             lockRepository.emitLockState(LockState.Locked)
-            advanceUntilIdle()
             assertThat(awaitItem().lockState).isEqualTo(LockState.Locked)
-
+            
             lockRepository.emitLockState(LockState.Unlocked)
-            advanceUntilIdle()
             assertThat(awaitItem().lockState).isEqualTo(LockState.Unlocked)
+            cancelAndIgnoreRemainingEvents()
+
         }
     }
 
@@ -277,6 +296,7 @@ class HomeViewModelTest {
     private fun createViewModel() = HomeViewModel(
         observeLockState = ObserveLockStateUseCase(lockRepository),
         observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
+        observeUsageTimer = observeUsageTimerUseCase,
         startLock = StartLockUseCase(lockRepository),
         stopLock = StopLockUseCase(lockRepository),
         startDelayedLock = StartDelayedLockUseCase(lockRepository),
@@ -287,37 +307,6 @@ class HomeViewModelTest {
     )
 
     // Fake implementations for testing
-
-    private class FakeLockRepository : LockRepository {
-        private val lockStateFlow = MutableStateFlow<LockState>(LockState.Unlocked)
-        
-        var startLockCallCount = 0
-        var stopLockCallCount = 0
-        var startDelayedLockCallCount = 0
-        var restoreNotificationCallCount = 0
-
-        override fun observeLockState(): Flow<LockState> = lockStateFlow
-
-        override fun startLock() {
-            startLockCallCount++
-        }
-
-        override fun stopLock() {
-            stopLockCallCount++
-        }
-
-        override fun startDelayedLock() {
-            startDelayedLockCallCount++
-        }
-
-        override fun restoreNotification() {
-            restoreNotificationCallCount++
-        }
-
-        fun emitLockState(state: LockState) {
-            lockStateFlow.value = state
-        }
-    }
 
     private class FakeConfigRepository : ConfigRepository {
         private val orientationModeFlow = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
