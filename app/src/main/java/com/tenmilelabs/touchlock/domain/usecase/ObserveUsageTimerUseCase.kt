@@ -55,19 +55,18 @@ class ObserveUsageTimerUseCase(
     private var currentDate: String = timeProvider.getCurrentDateString()
 
     init {
-        // Observe lock state changes
         scope.launch {
+            // IMPORTANT: Load persisted data FIRST before observing lock state changes
+            // to prevent race condition where stopTimer() overwrites restored data
+            loadTodayUsage()
+            
+            // Now observe lock state changes
             lockRepository.observeLockState().collect { lockState ->
                 when (lockState) {
                     LockState.Locked -> startTimer()
                     LockState.Unlocked -> stopTimer()
                 }
             }
-        }
-
-        // Initialize timer state from persisted data
-        scope.launch {
-            loadTodayUsage()
         }
     }
 
