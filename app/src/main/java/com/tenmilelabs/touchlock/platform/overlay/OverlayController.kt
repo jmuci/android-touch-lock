@@ -34,7 +34,11 @@ class OverlayController @Inject constructor(
         hideUnlockHandle()
     }
 
-    fun show(orientationMode: OrientationMode, onUnlockRequested: () -> Unit) {
+    fun show(
+        orientationMode: OrientationMode,
+        debugTintVisible: Boolean = false,
+        onUnlockRequested: () -> Unit
+    ) {
         if (overlayView != null) return
 
         currentOrientationMode = orientationMode
@@ -44,7 +48,8 @@ class OverlayController @Inject constructor(
             onUnlockRequested = onUnlockRequested,
             onDoubleTapDetected = {
                 showUnlockHandle(onUnlockRequested)
-            }
+            },
+            debugTintVisible = debugTintVisible
         )
         windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
     }
