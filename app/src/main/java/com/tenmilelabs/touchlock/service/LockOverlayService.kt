@@ -16,6 +16,8 @@ import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
@@ -34,6 +36,10 @@ class LockOverlayService : LifecycleService() {
     private var isServiceRunning = false
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
+    
+    // EXPERIMENTAL: Job for delayed overlay attachment to prevent PiP triggering
+    // See: startLock() for rationale
+    private var overlayAttachJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -86,8 +92,20 @@ class LockOverlayService : LifecycleService() {
             return
         }
 
-        // Get current orientation mode and apply it
-        lifecycleScope.launch {
+        // Cancel any pending overlay attachment
+        overlayAttachJob?.cancel()
+
+        // Immediately update UI state and notification
+        // This ensures the user sees "Locked" state without delay
+        _lockState.value = LockState.Locked
+        assertForegroundState(notificationManager.buildLockedNotification())
+
+        // EXPERIMENTAL: Delay overlay attachment to reduce PiP triggering
+        // Some video call apps (e.g. WhatsApp) immediately enter PiP when overlay is attached.
+        // This delay tests whether deferring the overlay prevents the PiP trigger.
+        // If ineffective, this delay can be removed by setting OVERLAY_ATTACH_DELAY_MS to 0.
+        overlayAttachJob = lifecycleScope.launch {
+            // Get current orientation mode
             val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
                 ?: OrientationMode.FOLLOW_SYSTEM
             
@@ -99,28 +117,27 @@ class LockOverlayService : LifecycleService() {
                 )
                 startActivity(intent)
                 
-                // Small delay to let activity start before showing overlay
-                handler.postDelayed({
-                    overlayController.show(orientationMode) {
-                        stopLock()
-                    }
-                }, 100)
+                // Wait for orientation activity to start + experimental PiP delay
+                delay(100L + OVERLAY_ATTACH_DELAY_MS)
             } else {
-                // No orientation locking needed, show overlay directly
-                overlayController.show(orientationMode) {
-                    stopLock()
-                }
+                // Experimental delay to reduce PiP triggering
+                delay(OVERLAY_ATTACH_DELAY_MS)
             }
 
-            // Reassert foreground state with locked notification
-            assertForegroundState(notificationManager.buildLockedNotification())
-
-            _lockState.value = LockState.Locked
+            // After delay, attach the overlay (if not cancelled)
+            overlayController.show(orientationMode) {
+                stopLock()
+            }
         }
     }
 
     private fun stopLock() {
         if (_lockState.value == LockState.Unlocked) return
+
+        // Cancel any pending overlay attachment
+        // This ensures overlay is never attached if user unlocks during the delay
+        overlayAttachJob?.cancel()
+        overlayAttachJob = null
 
         overlayController.hide()
         
@@ -273,6 +290,7 @@ class LockOverlayService : LifecycleService() {
     // Defensive stop. Prevents rare window leaks.
     override fun onDestroy() {
         handler.removeCallbacks(countdownRunnable)
+        overlayAttachJob?.cancel()
         overlayController.hide()
         super.onDestroy()
     }
@@ -289,6 +307,26 @@ class LockOverlayService : LifecycleService() {
         const val NOTIFICATION_ID = 1
 
         private const val COUNTDOWN_DURATION_SECONDS = 10
+
+        /**
+         * EXPERIMENTAL: Delay before attaching the overlay (milliseconds).
+         * 
+         * Some video call apps (e.g. WhatsApp) immediately enter Picture-in-Picture (PiP) mode
+         * when a system overlay is attached. This delay tests whether deferring the overlay
+         * attachment prevents triggering PiP.
+         * 
+         * During the delay:
+         * - UI state shows "Locked" immediately
+         * - Notification shows "Locked" immediately
+         * - Overlay is NOT attached (no touch blocking yet)
+         * 
+         * Tuning:
+         * - 300-500ms is recommended for testing
+         * - Set to 0 to remove the delay if ineffective
+         * 
+         * Safety: Job is cancelled if lock is disabled during the delay, preventing late attachment.
+         */
+        private const val OVERLAY_ATTACH_DELAY_MS = 400L
 
         private val _lockState = MutableStateFlow<LockState>(LockState.Unlocked)
         val lockState: StateFlow<LockState> = _lockState
