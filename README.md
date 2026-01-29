@@ -1,4 +1,6 @@
 # Touch Lock
+[![Android Automatic Unit Tests Run](https://github.com/jmuci/android-touch-lock/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/jmuci/android-touch-lock/actions/workflows/unit-tests.yml)
+
 
 **Touch Lock** is a lightweight Android utility app that temporarily disables touch input on the screen while keeping content visible.
 
