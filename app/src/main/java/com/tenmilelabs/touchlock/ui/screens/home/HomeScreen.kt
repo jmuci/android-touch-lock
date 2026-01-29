@@ -28,20 +28,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 
 @Composable
 fun HomeScreen(
@@ -71,6 +71,7 @@ fun HomeScreen(
         areNotificationsAvailable = uiState.areNotificationsAvailable,
         notificationIssueDescription = viewModel.notificationIssueDescription,
         currentOrientationMode = uiState.orientationMode,
+        usageTimer = uiState.usageTimer,
         onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
@@ -87,6 +88,7 @@ private fun HomeScreenContent(
     areNotificationsAvailable: Boolean,
     notificationIssueDescription: String,
     currentOrientationMode: OrientationMode,
+    usageTimer: UsageTimerState,
     onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
@@ -147,6 +149,12 @@ private fun HomeScreenContent(
                 modifier = Modifier.padding(vertical = 16.dp),
                 currentOrientationMode = currentOrientationMode,
                 onScreenRotationSettingChanged = anScreenRotationSettingChanged
+            )
+            
+            // Usage Timer Card
+            UsageTimerCard(
+                modifier = Modifier.padding(vertical = 16.dp),
+                usageTimer = usageTimer
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -358,6 +366,51 @@ fun SettingsCard(
     }
 }
 
+@Composable
+fun UsageTimerCard(
+    modifier: Modifier,
+    usageTimer: UsageTimerState
+) {
+    Surface(
+        shadowElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = formatTime(usageTimer.elapsedMillisToday),
+                style = MaterialTheme.typography.displayMedium,
+                color = if (usageTimer.isRunning) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+            Text(
+                text = "Time locked today",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * Formats milliseconds to "Xm Ys" format.
+ */
+private fun formatTime(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "${minutes}m ${seconds}s"
+}
+
     @Preview(showBackground = true, name = "Unlocked State")
     @Composable
     private fun HomeScreenUnlockedPreview() {
@@ -368,6 +421,7 @@ fun SettingsCard(
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
+                usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -388,6 +442,7 @@ fun SettingsCard(
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.PORTRAIT,
+                usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -419,6 +474,7 @@ fun SettingsCard(
                 areNotificationsAvailable = true,
                 notificationIssueDescription = "",
                 currentOrientationMode = OrientationMode.LANDSCAPE,
+                usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
@@ -439,6 +495,7 @@ fun SettingsCard(
                 areNotificationsAvailable = false,
                 notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
+                usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
