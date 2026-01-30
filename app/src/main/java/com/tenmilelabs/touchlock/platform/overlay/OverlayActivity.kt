@@ -15,6 +15,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.FrameLayout
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import timber.log.Timber
 
 /**
  * Fullscreen Activity that hosts the touch-blocking overlay.
@@ -53,7 +54,8 @@ class OverlayActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        Timber.d("TL::lifecycle OverlayActivity.onCreate() - Activity created, savedInstanceState=${savedInstanceState != null}")
+
         // Extract configuration from intent
         val orientationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE, OrientationMode::class.java)
@@ -100,10 +102,31 @@ class OverlayActivity : Activity() {
         }
     }
     
+    override fun onStart() {
+        super.onStart()
+        Timber.d("TL::lifecycle OverlayActivity.onStart() - Activity becoming visible")
+    }
+
     override fun onResume() {
         super.onResume()
+        Timber.d("TL::lifecycle OverlayActivity.onResume() - Activity in foreground, interactive")
         // Hide system UI after window is fully initialized
         hideSystemUI()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Timber.d("TL::lifecycle OverlayActivity.onPause() - Activity losing focus, partially visible")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Timber.d("TL::lifecycle OverlayActivity.onStop() - Activity no longer visible")
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        Timber.d("TL::lifecycle OverlayActivity.onRestart() - Activity restarting after onStop()")
     }
     
     /**
@@ -178,6 +201,7 @@ class OverlayActivity : Activity() {
     }
 
     override fun onDestroy() {
+        Timber.d("TL::lifecycle OverlayActivity.onDestroy() - Activity being destroyed, isFinishing=$isFinishing")
         super.onDestroy()
         hideUnlockHandle() // Clean up handle if present
         overlayView?.cleanup()

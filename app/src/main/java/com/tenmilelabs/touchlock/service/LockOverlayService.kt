@@ -8,8 +8,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.lifecycle.LifecycleService
+import timber.log.Timber
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
@@ -47,9 +47,14 @@ class LockOverlayService : LifecycleService() {
         }
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        Timber.d("TL::lifecycle LockOverlayService.onCreate() - Service created")
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        Log.d("TouchLock", "onStartCommand called with action: ${intent?.action}")
+        Timber.d("TL::lifecycle LockOverlayService.onStartCommand() - action=${intent?.action}, flags=$flags, startId=$startId")
         when (intent?.action) {
             ACTION_INIT -> initService()
             ACTION_START -> startLock()
@@ -313,6 +318,7 @@ class LockOverlayService : LifecycleService() {
 
     // Defensive cleanup. Prevents rare window leaks.
     override fun onDestroy() {
+        Timber.d("TL::lifecycle LockOverlayService.onDestroy() - Service being destroyed, cleaning up")
         handler.removeCallbacks(countdownRunnable)
         finishOverlayActivity()
         overlayController.hideCountdownOverlay()
@@ -322,6 +328,17 @@ class LockOverlayService : LifecycleService() {
             // Receiver not registered or already unregistered
         }
         super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent): android.os.IBinder? {
+        super.onBind(intent)
+        Timber.d("TL::lifecycle LockOverlayService.onBind() - Client binding to service")
+        return null
+    }
+
+    override fun onUnbind(intent: Intent): Boolean {
+        Timber.d("TL::lifecycle LockOverlayService.onUnbind() - All clients unbound from service")
+        return super.onUnbind(intent)
     }
 
     companion object {
