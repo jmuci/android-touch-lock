@@ -132,9 +132,14 @@ class OverlayController @Inject constructor(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    // FLAG_LAYOUT_NO_LIMITS allows the window to extend beyond screen bounds
-                    // This helps with orientation changes
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    // FLAG_LAYOUT_IN_SCREEN: Allows the overlay to extend into system UI areas.
+                    // Combined with immersive mode (set on the view), this creates true fullscreen.
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    // FLAG_LAYOUT_NO_LIMITS: Allows the overlay to extend beyond screen bounds.
+                    // Required for the overlay to properly fill the entire display when system UI is hidden.
+                    // Note: System UI hiding is handled by the view itself using WindowInsetsController
+                    // (Android 11+) or systemUiVisibility flags (Android 10 and below).
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT

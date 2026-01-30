@@ -8,16 +8,25 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 
 /**
- * Transparent Activity used solely to lock screen orientation when Touch Lock is active.
+ * Transparent fullscreen Activity used to:
+ * 1. Hide system UI (status bar and navigation bar) to prevent gesture navigation
+ * 2. Lock screen orientation (when not set to FOLLOW_SYSTEM)
  * 
- * Since overlays (TYPE_APPLICATION_OVERLAY) cannot reliably force system rotation,
- * this Activity provides a transparent background that locks the orientation
- * according to the user's selected mode.
+ * Why an Activity is required:
+ * TYPE_APPLICATION_OVERLAY windows cannot hide system UI or lock orientation due to Android
+ * security restrictions. Only Activities can use window.decorView.systemUiVisibility and
+ * requestedOrientation to control these behaviors.
  * 
- * The overlay is shown on top of this Activity to block touches.
+ * Lifecycle:
+ * - Started when lock is enabled (always, regardless of orientation mode)
+ * - Finishes when lock is disabled via ACTION_STOP broadcast
+ * - The overlay is shown on top of this Activity to block touches
  */
 class OrientationLockActivity : Activity() {
 
@@ -52,6 +61,44 @@ class OrientationLockActivity : Activity() {
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(stopReceiver, IntentFilter(ACTION_STOP))
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // Hide system UI after window is fully initialized
+        // window.insetsController is available after onResume()
+        hideSystemUI()
+    }
+    
+    /**
+     * Hides system UI following Android documentation recommendations.
+     * Uses window.decorView as per official guidance.
+     */
+    @Suppress("DEPRECATION")
+    private fun hideSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+): Use WindowInsetsController
+            window.insetsController?.let { controller ->
+                controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            // Android 10 and below: Use decorView systemUiVisibility as per Android docs
+            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+        }
+    }
+    
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Re-hide system UI when window regains focus (e.g., after notification shade is closed)
+        if (hasFocus) {
+            hideSystemUI()
         }
     }
 

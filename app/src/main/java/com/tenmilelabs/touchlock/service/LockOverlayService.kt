@@ -60,18 +60,14 @@ class LockOverlayService : LifecycleService() {
     private fun initService() {
         if (isServiceRunning) return
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notificationManager.buildUnlockedNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(
-                NOTIFICATION_ID,
-                notificationManager.buildUnlockedNotification()
-            )
-        }
+        // When targeting Android 14+ (API 34+), foreground service type is mandatory
+        // Use the 3-parameter version for all API levels to satisfy target SDK requirements
+        startForeground(
+            NOTIFICATION_ID,
+            notificationManager.buildUnlockedNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
+        
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
         
@@ -103,26 +99,23 @@ class LockOverlayService : LifecycleService() {
             val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
                 ?: OrientationMode.FOLLOW_SYSTEM
             
-            // Start transparent orientation lock activity if orientation is locked
-            if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
-                val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
-                    this@LockOverlayService,
-                    orientationMode
-                )
-                startActivity(intent)
-                
-                // Small delay to let activity start before showing overlay
-                handler.postDelayed({
-                    overlayController.show(orientationMode, debugOverlayVisible) {
-                        stopLock()
-                    }
-                }, 100)
-            } else {
-                // No orientation locking needed, show overlay directly
+            // Always start the transparent Activity to:
+            // 1. Hide system UI (status bar and navigation bar)
+            // 2. Lock screen orientation (if not FOLLOW_SYSTEM)
+            // Note: TYPE_APPLICATION_OVERLAY windows cannot hide system UI,
+            // so we need an Activity window to control system UI visibility.
+            val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
+                this@LockOverlayService,
+                orientationMode
+            )
+            startActivity(intent)
+            
+            // Small delay to let activity start before showing overlay
+            handler.postDelayed({
                 overlayController.show(orientationMode, debugOverlayVisible) {
                     stopLock()
                 }
-            }
+            }, 100)
 
             // Reassert foreground state with locked notification
             assertForegroundState(notificationManager.buildLockedNotification())
@@ -136,7 +129,7 @@ class LockOverlayService : LifecycleService() {
 
         overlayController.hide()
         
-        // Finish orientation lock activity if it's running
+        // Always finish the Activity to restore system UI and unlock orientation
         finishOrientationLockActivity()
 
         // Reassert foreground state with unlocked notification
@@ -146,7 +139,7 @@ class LockOverlayService : LifecycleService() {
     }
     
     private fun finishOrientationLockActivity() {
-        // Send broadcast to finish the activity
+        // Send broadcast to finish the Activity, which restores system UI
         val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
         sendBroadcast(intent)
     }
@@ -276,18 +269,13 @@ class LockOverlayService : LifecycleService() {
      * Always use this instead of NotificationManager.notify() for foreground service notifications.
      */
     private fun assertForegroundState(notification: android.app.Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(
-                NOTIFICATION_ID,
-                notification
-            )
-        }
+        // When targeting Android 14+ (API 34+), foreground service type is mandatory
+        // Use the 3-parameter version for all API levels to satisfy target SDK requirements
+        startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
     }
 
     private fun dismissService() {
