@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -39,14 +40,16 @@ class UnlockHandleView(
         isClickable = true
         isFocusable = true
 
-        // Set size to 300dp
+        // Set size to 100dp
         val sizePx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             HANDLE_SIZE_DP,
             context.resources.displayMetrics
         ).toInt()
 
-        layoutParams = LayoutParams(sizePx, sizePx)
+        layoutParams = FrameLayout.LayoutParams(sizePx, sizePx).apply {
+            gravity = Gravity.CENTER
+        }
 
         // Set rounded background with semi-transparent color
         background = createRoundedBackground()
@@ -117,7 +120,7 @@ class UnlockHandleView(
     }
 
     companion object {
-        const val HANDLE_SIZE_DP = 300f
+        const val HANDLE_SIZE_DP = 100f
         private const val PRESS_AND_HOLD_DURATION_MS = 1000L
     }
 }

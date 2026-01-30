@@ -8,9 +8,12 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.widget.FrameLayout
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 
 /**
@@ -32,6 +35,13 @@ import com.tenmilelabs.touchlock.domain.model.OrientationMode
 class OverlayActivity : Activity() {
 
     private var overlayView: OverlayView? = null
+    private var unlockHandleView: UnlockHandleView? = null
+    private var contentFrame: FrameLayout? = null
+    
+    private val handler = Handler(Looper.getMainLooper())
+    private val hideHandleRunnable = Runnable {
+        hideUnlockHandle()
+    }
 
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -61,20 +71,25 @@ class OverlayActivity : Activity() {
             OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
         
-        // Create and set the overlay as the Activity's content view
+        // Create a FrameLayout to host both overlay and unlock handle
+        contentFrame = FrameLayout(this)
+        
+        // Create the main overlay view (full screen, blocks touches)
         overlayView = OverlayView(
             context = this,
             onUnlockRequested = {
-                // Notify service to unlock via broadcast
-                sendBroadcast(Intent(ACTION_UNLOCK_REQUESTED))
-                finish()
+                // Legacy: Long-press anywhere on overlay (fallback)
+                handleUnlockRequest()
             },
             onDoubleTapDetected = {
-                // TODO: Show unlock handle when implemented
+                // Show unlock handle on double-tap
+                showUnlockHandle()
             },
             debugTintVisible = debugTintVisible
         )
-        setContentView(overlayView)
+        contentFrame?.addView(overlayView)
+        
+        setContentView(contentFrame)
         
         // Register receiver to listen for stop signal
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -122,10 +137,52 @@ class OverlayActivity : Activity() {
         }
     }
 
+    /**
+     * Shows the unlock handle in the center of the screen.
+     * Auto-hides after timeout.
+     */
+    private fun showUnlockHandle() {
+        // Remove existing handle if present
+        hideUnlockHandle()
+        
+        unlockHandleView = UnlockHandleView(this) {
+            // When handle is pressed and held, unlock
+            handleUnlockRequest()
+        }
+        
+        contentFrame?.addView(unlockHandleView)
+        
+        // Auto-hide after timeout
+        handler.postDelayed(hideHandleRunnable, HANDLE_VISIBILITY_TIMEOUT_MS)
+    }
+    
+    /**
+     * Hides the unlock handle.
+     */
+    private fun hideUnlockHandle() {
+        unlockHandleView?.let {
+            it.cleanup()
+            contentFrame?.removeView(it)
+        }
+        unlockHandleView = null
+        handler.removeCallbacks(hideHandleRunnable)
+    }
+    
+    /**
+     * Handles the unlock request (from either handle or long-press).
+     */
+    private fun handleUnlockRequest() {
+        // Notify service to unlock via broadcast
+        sendBroadcast(Intent(ACTION_UNLOCK_REQUESTED))
+        finish()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        hideUnlockHandle() // Clean up handle if present
         overlayView?.cleanup()
         overlayView = null
+        contentFrame = null
         try {
             unregisterReceiver(stopReceiver)
         } catch (e: IllegalArgumentException) {
@@ -142,6 +199,7 @@ class OverlayActivity : Activity() {
     companion object {
         private const val EXTRA_ORIENTATION_MODE = "orientation_mode"
         private const val EXTRA_DEBUG_TINT = "debug_tint"
+        private const val HANDLE_VISIBILITY_TIMEOUT_MS = 4000L // 4 seconds
         
         const val ACTION_STOP = "com.tenmilelabs.touchlock.OVERLAY_STOP"
         const val ACTION_UNLOCK_REQUESTED = "com.tenmilelabs.touchlock.UNLOCK_REQUESTED"
