@@ -13,6 +13,7 @@ class TouchLockApp : Application() {
     override fun onCreate() {
         super.onCreate()
         initTimber()
+        Timber.d("TL::lifecycle TouchLockApp.onCreate() - App created!")
         startLockService()
     }
 

@@ -46,7 +46,7 @@ class OverlayView(
         Timber.d("TL::lifecycle OverlayView.init - View constructed, debugTintVisible=$debugTintVisible")
         // Debug-only: Apply visible tint to confirm overlay is attached (for lifecycle debugging)
         if (debugTintVisible) {
-            setBackgroundColor(Color.argb(13, 255, 0, 0)) // ~5% red tint
+            setBackgroundColor(Color.argb(77, 255, 0, 0)) // ~30% red tint
         } else {
             setBackgroundColor(Color.TRANSPARENT)
         }
