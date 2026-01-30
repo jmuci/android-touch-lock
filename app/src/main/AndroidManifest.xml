@@ -24,9 +24,9 @@
             </intent-filter>
         </activity>
         
-        <!-- Transparent activity for orientation locking -->
+        <!-- Fullscreen activity that hosts the touch-blocking overlay -->
         <activity
-            android:name=".ui.OrientationLockActivity"
+            android:name=".platform.overlay.OverlayActivity"
             android:exported="false"
             android:theme="@style/Theme.TouchLock.Transparent"
             android:excludeFromRecents="true"

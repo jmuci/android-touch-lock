@@ -9,11 +9,13 @@ import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.tenmilelabs.touchlock.R
+import timber.log.Timber
 
 /**
  * A small, square overlay that appears after double-tap.
@@ -34,19 +36,22 @@ class UnlockHandleView(
     }
 
     init {
+        Timber.d("TL::lifecycle UnlockHandleView.init - View constructed")
         orientation = VERTICAL
         gravity = Gravity.CENTER
         isClickable = true
         isFocusable = true
 
-        // Set size to 300dp
+        // Set size to 100dp
         val sizePx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             HANDLE_SIZE_DP,
             context.resources.displayMetrics
         ).toInt()
 
-        layoutParams = LayoutParams(sizePx, sizePx)
+        layoutParams = FrameLayout.LayoutParams(sizePx, sizePx).apply {
+            gravity = Gravity.CENTER
+        }
 
         // Set rounded background with semi-transparent color
         background = createRoundedBackground()
@@ -77,6 +82,16 @@ class UnlockHandleView(
         elevation = dpToPx(8).toFloat()
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Timber.d("TL::lifecycle UnlockHandleView.onAttachedToWindow() - View attached to window")
+    }
+
+    override fun onDetachedFromWindow() {
+        Timber.d("TL::lifecycle UnlockHandleView.onDetachedFromWindow() - View detached from window")
+        super.onDetachedFromWindow()
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -97,6 +112,7 @@ class UnlockHandleView(
     }
 
     fun cleanup() {
+        Timber.d("TL::lifecycle UnlockHandleView.cleanup() - Cleaning up handlers and callbacks")
         handler.removeCallbacks(longPressRunnable)
     }
 
@@ -117,7 +133,7 @@ class UnlockHandleView(
     }
 
     companion object {
-        const val HANDLE_SIZE_DP = 300f
+        const val HANDLE_SIZE_DP = 100f
         private const val PRESS_AND_HOLD_DURATION_MS = 1000L
     }
 }

@@ -7,11 +7,15 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.widget.FrameLayout
+import timber.log.Timber
 
 /**
  * Full-screen overlay that blocks all touch input.
  * Detects double-tap to show unlock handle.
  * Detects long-press for direct unlock (legacy).
+ * 
+ * Note: System UI hiding (status bar, navigation bar) is handled by OverlayActivity,
+ * since TYPE_APPLICATION_OVERLAY windows cannot control system UI visibility.
  * 
  * @param debugTintVisible Debug-only: When true, applies a visible tint to confirm overlay is attached
  */
@@ -39,14 +43,25 @@ class OverlayView(
     }
 
     init {
+        Timber.d("TL::lifecycle OverlayView.init - View constructed, debugTintVisible=$debugTintVisible")
         // Debug-only: Apply visible tint to confirm overlay is attached (for lifecycle debugging)
         if (debugTintVisible) {
-            setBackgroundColor(Color.argb(13, 255, 0, 0)) // ~5% red tint
+            setBackgroundColor(Color.argb(77, 255, 0, 0)) // ~30% red tint
         } else {
             setBackgroundColor(Color.TRANSPARENT)
         }
         isClickable = true
         isFocusable = false
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Timber.d("TL::lifecycle OverlayView.onAttachedToWindow() - View attached to window")
+    }
+
+    override fun onDetachedFromWindow() {
+        Timber.d("TL::lifecycle OverlayView.onDetachedFromWindow() - View detached from window")
+        super.onDetachedFromWindow()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -87,6 +102,7 @@ class OverlayView(
     }
 
     fun cleanup() {
+        Timber.d("TL::lifecycle OverlayView.cleanup() - Cleaning up handlers and callbacks")
         handler.removeCallbacks(longPressRunnable)
         handler.removeCallbacks(doubleTapResetRunnable)
     }

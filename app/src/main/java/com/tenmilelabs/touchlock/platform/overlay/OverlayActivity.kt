@@ -1,0 +1,250 @@
+package com.tenmilelabs.touchlock.platform.overlay
+
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ActivityInfo
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.widget.FrameLayout
+import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import timber.log.Timber
+
+/**
+ * Fullscreen Activity that hosts the touch-blocking overlay.
+ * 
+ * Why an Activity is required:
+ * - TYPE_APPLICATION_OVERLAY windows cannot hide system UI or lock orientation
+ * - Only Activities can control window.decorView.systemUiVisibility and requestedOrientation
+ * 
+ * Architecture:
+ * - This Activity IS the overlay (not a separate WindowManager overlay)
+ * - Simplified lifecycle: Activity lifecycle = Overlay lifecycle
+ * - No WindowManager complexity
+ * 
+ * Lifecycle:
+ * - Started by LockOverlayService when lock is enabled
+ * - Finishes when lock is disabled via ACTION_STOP broadcast
+ */
+class OverlayActivity : Activity() {
+
+    private var overlayView: OverlayView? = null
+    private var unlockHandleView: UnlockHandleView? = null
+    private var contentFrame: FrameLayout? = null
+    
+    private val handler = Handler(Looper.getMainLooper())
+    private val hideHandleRunnable = Runnable {
+        hideUnlockHandle()
+    }
+
+    private val stopReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_STOP) {
+                finish()
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        Timber.d("TL::lifecycle OverlayActivity.onCreate() - Activity created, savedInstanceState=${savedInstanceState != null}")
+
+        // Extract configuration from intent
+        val orientationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra(EXTRA_ORIENTATION_MODE, OrientationMode::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra(EXTRA_ORIENTATION_MODE) as? OrientationMode
+        } ?: OrientationMode.FOLLOW_SYSTEM
+        
+        val debugTintVisible = intent.getBooleanExtra(EXTRA_DEBUG_TINT, false)
+        
+        // Set screen orientation
+        requestedOrientation = when (orientationMode) {
+            OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        
+        // Create a FrameLayout to host both overlay and unlock handle
+        contentFrame = FrameLayout(this)
+        
+        // Create the main overlay view (full screen, blocks touches)
+        overlayView = OverlayView(
+            context = this,
+            onUnlockRequested = {
+                // Legacy: Long-press anywhere on overlay (fallback)
+                handleUnlockRequest()
+            },
+            onDoubleTapDetected = {
+                // Show unlock handle on double-tap
+                showUnlockHandle()
+            },
+            debugTintVisible = debugTintVisible
+        )
+        contentFrame?.addView(overlayView)
+        
+        setContentView(contentFrame)
+        
+        // Register receiver to listen for stop signal
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(stopReceiver, IntentFilter(ACTION_STOP), RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(stopReceiver, IntentFilter(ACTION_STOP))
+        }
+    }
+    
+    override fun onStart() {
+        super.onStart()
+        Timber.d("TL::lifecycle OverlayActivity.onStart() - Activity becoming visible")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Timber.d("TL::lifecycle OverlayActivity.onResume() - Activity in foreground, interactive")
+        // Notify service that we're back in foreground so it can hide WindowManager overlay
+        sendBroadcast(Intent(ACTION_ACTIVITY_RESUMED))
+        // Hide system UI after window is fully initialized
+        hideSystemUI()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Timber.d("TL::lifecycle OverlayActivity.onPause() - Activity losing focus, partially visible")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Timber.d("TL::lifecycle OverlayActivity.onStop() - Activity no longer visible, notifying service")
+        // Notify service that we're going to background so it can show WindowManager overlay
+        sendBroadcast(Intent(ACTION_ACTIVITY_STOPPED))
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        Timber.d("TL::lifecycle OverlayActivity.onRestart() - Activity restarting after onStop()")
+    }
+    
+    /**
+     * Hides system UI (status bar and navigation bar) using immersive mode.
+     * Follows Android documentation recommendations using window.decorView.
+     */
+    @Suppress("DEPRECATION")
+    private fun hideSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+): Use WindowInsetsController
+            window.insetsController?.let { controller ->
+                controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            // Android 10 and below: Use decorView systemUiVisibility
+            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+        }
+    }
+    
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Re-hide system UI when window regains focus (e.g., after notification shade)
+        if (hasFocus) {
+            hideSystemUI()
+        }
+    }
+
+    /**
+     * Shows the unlock handle in the center of the screen.
+     * Auto-hides after timeout.
+     */
+    private fun showUnlockHandle() {
+        // Remove existing handle if present
+        hideUnlockHandle()
+        
+        unlockHandleView = UnlockHandleView(this) {
+            // When handle is pressed and held, unlock
+            handleUnlockRequest()
+        }
+        
+        contentFrame?.addView(unlockHandleView)
+        
+        // Auto-hide after timeout
+        handler.postDelayed(hideHandleRunnable, HANDLE_VISIBILITY_TIMEOUT_MS)
+    }
+    
+    /**
+     * Hides the unlock handle.
+     */
+    private fun hideUnlockHandle() {
+        unlockHandleView?.let {
+            it.cleanup()
+            contentFrame?.removeView(it)
+        }
+        unlockHandleView = null
+        handler.removeCallbacks(hideHandleRunnable)
+    }
+    
+    /**
+     * Handles the unlock request (from either handle or long-press).
+     */
+    private fun handleUnlockRequest() {
+        // Notify service to unlock via broadcast
+        sendBroadcast(Intent(ACTION_UNLOCK_REQUESTED))
+        finish()
+    }
+
+    override fun onDestroy() {
+        Timber.d("TL::lifecycle OverlayActivity.onDestroy() - Activity being destroyed, isFinishing=$isFinishing")
+        super.onDestroy()
+        hideUnlockHandle() // Clean up handle if present
+        overlayView?.cleanup()
+        overlayView = null
+        contentFrame = null
+        try {
+            unregisterReceiver(stopReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver already unregistered
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Prevent back button from closing this Activity
+        // The overlay unlock mechanism should be used instead
+    }
+
+    companion object {
+        private const val EXTRA_ORIENTATION_MODE = "orientation_mode"
+        private const val EXTRA_DEBUG_TINT = "debug_tint"
+        private const val HANDLE_VISIBILITY_TIMEOUT_MS = 4000L // 4 seconds
+        
+        const val ACTION_STOP = "com.tenmilelabs.touchlock.OVERLAY_STOP"
+        const val ACTION_UNLOCK_REQUESTED = "com.tenmilelabs.touchlock.UNLOCK_REQUESTED"
+        const val ACTION_ACTIVITY_STOPPED = "com.tenmilelabs.touchlock.OVERLAY_ACTIVITY_STOPPED"
+        const val ACTION_ACTIVITY_RESUMED = "com.tenmilelabs.touchlock.OVERLAY_ACTIVITY_RESUMED"
+        
+        fun createStartIntent(
+            context: Context,
+            orientationMode: OrientationMode,
+            debugTintVisible: Boolean = false
+        ): Intent {
+            return Intent(context, OverlayActivity::class.java).apply {
+                putExtra(EXTRA_ORIENTATION_MODE, orientationMode)
+                putExtra(EXTRA_DEBUG_TINT, debugTintVisible)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            }
+        }
+    }
+}
