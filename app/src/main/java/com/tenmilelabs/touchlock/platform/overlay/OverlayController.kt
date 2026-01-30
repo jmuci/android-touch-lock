@@ -7,11 +7,11 @@ import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
-import android.view.Surface
 import android.view.WindowManager
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,24 +34,64 @@ class OverlayController @Inject constructor(
         hideUnlockHandle()
     }
 
-    fun show(
+    /**
+     * Shows the full-screen touch-blocking overlay via WindowManager.
+     * Used as fallback when OverlayActivity goes to background (e.g., Home button pressed).
+     *
+     * Note: WindowManager overlays cannot hide system UI or lock orientation,
+     * but they persist across Home button presses.
+     */
+    fun showOverlay(
         orientationMode: OrientationMode,
         debugTintVisible: Boolean = false,
-        onUnlockRequested: () -> Unit
+        onUnlockRequested: () -> Unit,
+        onDoubleTapDetected: () -> Unit
     ) {
-        if (overlayView != null) return
+        if (overlayView != null) {
+            Timber.d("TL::lifecycle OverlayController.showOverlay() - Overlay already shown, skipping")
+            return
+        }
+
+        Timber.d("TL::lifecycle OverlayController.showOverlay() - Showing WindowManager overlay")
 
         currentOrientationMode = orientationMode
 
         overlayView = OverlayView(
             context = context,
             onUnlockRequested = onUnlockRequested,
-            onDoubleTapDetected = {
-                showUnlockHandle(onUnlockRequested)
-            },
+            onDoubleTapDetected = onDoubleTapDetected,
             debugTintVisible = debugTintVisible
         )
         windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
+    }
+
+    /**
+     * Hides the full-screen touch-blocking overlay.
+     * Called when OverlayActivity comes back to foreground.
+     */
+    fun hideOverlay() {
+        overlayView?.let {
+            Timber.d("TL::lifecycle OverlayController.hideOverlay() - Hiding WindowManager overlay")
+            it.cleanup()
+            windowManager.removeView(it)
+        }
+        overlayView = null
+    }
+
+    /**
+     * Checks if the WindowManager overlay is currently shown.
+     */
+    fun isOverlayShown(): Boolean = overlayView != null
+
+    @Deprecated("Use showOverlay instead", ReplaceWith("showOverlay(orientationMode, debugTintVisible, onUnlockRequested, {})"))
+    fun show(
+        orientationMode: OrientationMode,
+        debugTintVisible: Boolean = false,
+        onUnlockRequested: () -> Unit
+    ) {
+        showOverlay(orientationMode, debugTintVisible, onUnlockRequested) {
+            showUnlockHandle(onUnlockRequested)
+        }
     }
 
     fun hide() {
@@ -63,11 +103,33 @@ class OverlayController @Inject constructor(
         handler.removeCallbacks(hideHandleRunnable)
 
         // Clean up main overlay
-        overlayView?.let {
-            it.cleanup()
-            windowManager.removeView(it)
+        hideOverlay()
+    }
+
+    /**
+     * Shows the unlock handle via WindowManager.
+     * This persists even when OverlayActivity is in background.
+     *
+     * @param onUnlockRequested Callback when user completes unlock gesture
+     * @param autoHide If true, handle will auto-hide after timeout. Set to false for persistent display.
+     */
+    fun showPersistentUnlockHandle(onUnlockRequested: () -> Unit, autoHide: Boolean = true) {
+        // Remove existing handle if present
+        hideUnlockHandle()
+
+        Timber.d("TL::lifecycle OverlayController.showPersistentUnlockHandle() - Showing unlock handle, autoHide=$autoHide")
+
+        unlockHandleView = UnlockHandleView(context) {
+            // When unlock is requested from handle
+            onUnlockRequested()
         }
-        overlayView = null
+
+        windowManager.addView(unlockHandleView, handleLayoutParams())
+
+        // Auto-hide after timeout only if requested
+        if (autoHide) {
+            handler.postDelayed(hideHandleRunnable, HANDLE_VISIBILITY_TIMEOUT_MS)
+        }
     }
 
     /**

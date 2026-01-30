@@ -110,6 +110,8 @@ class OverlayActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Timber.d("TL::lifecycle OverlayActivity.onResume() - Activity in foreground, interactive")
+        // Notify service that we're back in foreground so it can hide WindowManager overlay
+        sendBroadcast(Intent(ACTION_ACTIVITY_RESUMED))
         // Hide system UI after window is fully initialized
         hideSystemUI()
     }
@@ -121,7 +123,9 @@ class OverlayActivity : Activity() {
 
     override fun onStop() {
         super.onStop()
-        Timber.d("TL::lifecycle OverlayActivity.onStop() - Activity no longer visible")
+        Timber.d("TL::lifecycle OverlayActivity.onStop() - Activity no longer visible, notifying service")
+        // Notify service that we're going to background so it can show WindowManager overlay
+        sendBroadcast(Intent(ACTION_ACTIVITY_STOPPED))
     }
 
     override fun onRestart() {
@@ -227,6 +231,8 @@ class OverlayActivity : Activity() {
         
         const val ACTION_STOP = "com.tenmilelabs.touchlock.OVERLAY_STOP"
         const val ACTION_UNLOCK_REQUESTED = "com.tenmilelabs.touchlock.UNLOCK_REQUESTED"
+        const val ACTION_ACTIVITY_STOPPED = "com.tenmilelabs.touchlock.OVERLAY_ACTIVITY_STOPPED"
+        const val ACTION_ACTIVITY_RESUMED = "com.tenmilelabs.touchlock.OVERLAY_ACTIVITY_RESUMED"
         
         fun createStartIntent(
             context: Context,

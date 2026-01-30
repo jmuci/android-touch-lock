@@ -38,11 +38,19 @@ class LockOverlayService : LifecycleService() {
     private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
     
-    // Receiver for unlock requests from OverlayActivity
-    private val unlockReceiver = object : BroadcastReceiver() {
+    // Receiver for messages from OverlayActivity
+    private val overlayActivityReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED) {
-                stopLock()
+            when (intent?.action) {
+                com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED -> {
+                    stopLock()
+                }
+                com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_ACTIVITY_STOPPED -> {
+                    onOverlayActivityStopped()
+                }
+                com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_ACTIVITY_RESUMED -> {
+                    onOverlayActivityResumed()
+                }
             }
         }
     }
@@ -76,18 +84,23 @@ class LockOverlayService : LifecycleService() {
     private fun initService() {
         if (isServiceRunning) return
 
-        // Register receiver for unlock requests from OverlayActivity
+        // Register receiver for messages from OverlayActivity
+        val overlayActivityFilter = IntentFilter().apply {
+            addAction(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED)
+            addAction(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_ACTIVITY_STOPPED)
+            addAction(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_ACTIVITY_RESUMED)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(
-                unlockReceiver,
-                IntentFilter(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED),
+                overlayActivityReceiver,
+                overlayActivityFilter,
                 RECEIVER_NOT_EXPORTED
             )
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(
-                unlockReceiver,
-                IntentFilter(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED)
+                overlayActivityReceiver,
+                overlayActivityFilter
             )
         }
 
@@ -140,18 +153,26 @@ class LockOverlayService : LifecycleService() {
                 orientationMode,
                 debugOverlayVisible
             )
+            Timber.d("TL::lifecycle LockOverlayService.startLock() - Starting OverlayActivity...")
+
             startActivity(intent)
 
             // Reassert foreground state with locked notification
             assertForegroundState(notificationManager.buildLockedNotification())
 
             _lockState.value = LockState.Locked
+            Timber.d("TL::lifecycle LockOverlayService.startLock() - === Lock state set to Locked!! ==== Lock state: ${_lockState.value}")
         }
     }
 
     private fun stopLock() {
         if (_lockState.value == LockState.Unlocked) return
-        
+
+        Timber.d("TL::lifecycle LockOverlayService.stopLock() - Stopping lock")
+
+        // Hide WindowManager overlay if shown (from background state)
+        overlayController.hide()
+
         // Finish the OverlayActivity to remove the overlay and restore system UI
         finishOverlayActivity()
 
@@ -159,6 +180,55 @@ class LockOverlayService : LifecycleService() {
         assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
+    }
+
+    /**
+     * Called when OverlayActivity goes to background (e.g., Home button pressed).
+     * Shows WindowManager overlay to maintain touch blocking.
+     */
+    private fun onOverlayActivityStopped() {
+        if (_lockState.value != LockState.Locked) return
+
+        Timber.d("TL::lifecycle LockOverlayService.onOverlayActivityStopped() - Activity backgrounded, showing WindowManager overlay")
+
+        lifecycleScope.launch {
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
+                ?: OrientationMode.FOLLOW_SYSTEM
+
+            // Show the touch-blocking overlay via WindowManager
+            overlayController.showOverlay(
+                orientationMode = orientationMode,
+                debugTintVisible = debugOverlayVisible,
+                onUnlockRequested = { stopLock() },
+                onDoubleTapDetected = {
+                    // Show persistent unlock handle (doesn't auto-hide when Activity is backgrounded)
+                    overlayController.showPersistentUnlockHandle(
+                        onUnlockRequested = { stopLock() },
+                        autoHide = false
+                    )
+                }
+            )
+
+            // Show persistent unlock handle immediately when Activity goes to background
+            // This gives the user a visual cue that lock is still active
+            overlayController.showPersistentUnlockHandle(
+                onUnlockRequested = { stopLock() },
+                autoHide = false
+            )
+        }
+    }
+
+    /**
+     * Called when OverlayActivity comes back to foreground.
+     * Hides WindowManager overlay since Activity will handle touch blocking.
+     */
+    private fun onOverlayActivityResumed() {
+        if (_lockState.value != LockState.Locked) return
+
+        Timber.d("TL::lifecycle LockOverlayService.onOverlayActivityResumed() - Activity resumed, hiding WindowManager overlay")
+
+        // Hide the WindowManager overlay - Activity will handle touch blocking
+        overlayController.hide()
     }
     
     private fun finishOverlayActivity() {
@@ -321,9 +391,9 @@ class LockOverlayService : LifecycleService() {
         Timber.d("TL::lifecycle LockOverlayService.onDestroy() - Service being destroyed, cleaning up")
         handler.removeCallbacks(countdownRunnable)
         finishOverlayActivity()
-        overlayController.hideCountdownOverlay()
+        overlayController.hide() // Clean up all overlays (main overlay, countdown, unlock handle)
         try {
-            unregisterReceiver(unlockReceiver)
+            unregisterReceiver(overlayActivityReceiver)
         } catch (e: IllegalArgumentException) {
             // Receiver not registered or already unregistered
         }
