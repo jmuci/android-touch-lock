@@ -13,6 +13,9 @@ import android.widget.FrameLayout
  * Detects double-tap to show unlock handle.
  * Detects long-press for direct unlock (legacy).
  * 
+ * Note: System UI hiding (status bar, navigation bar) is handled by OrientationLockActivity,
+ * since TYPE_APPLICATION_OVERLAY windows cannot control system UI visibility.
+ * 
  * @param debugTintVisible Debug-only: When true, applies a visible tint to confirm overlay is attached
  */
 class OverlayView(
