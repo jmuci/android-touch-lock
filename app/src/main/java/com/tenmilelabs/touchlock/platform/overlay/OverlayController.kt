@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
@@ -220,15 +221,24 @@ class OverlayController @Inject constructor(
     }
 
     private fun handleLayoutParams(): WindowManager.LayoutParams {
+        val sizePx = dpToPx(HANDLE_SIZE_DP)
         return WindowManager.LayoutParams(
-            HANDLE_SIZE_DP.toInt(),
-            HANDLE_SIZE_DP.toInt(),
+            sizePx,
+            sizePx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
         }
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            context.resources.displayMetrics
+        ).toInt()
     }
 
     private fun countdownLayoutParams(): WindowManager.LayoutParams {
