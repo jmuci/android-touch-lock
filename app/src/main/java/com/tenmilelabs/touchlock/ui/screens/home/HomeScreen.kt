@@ -184,7 +184,6 @@ internal fun HomeScreenContent(
                 } else {
                     // Portrait: Three cards stacked vertically
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        HowToUseCard(Modifier.padding(vertical = 16.dp))
                         SettingsCard(
                             modifier = Modifier.padding(vertical = 16.dp),
                             currentOrientationMode = currentOrientationMode,
