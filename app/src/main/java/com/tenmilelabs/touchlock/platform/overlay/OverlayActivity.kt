@@ -1,4 +1,4 @@
-package com.tenmilelabs.touchlock.ui
+package com.tenmilelabs.touchlock.platform.overlay
 
 import android.app.Activity
 import android.content.BroadcastReceiver
@@ -14,21 +14,24 @@ import android.view.WindowInsetsController
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 
 /**
- * Transparent fullscreen Activity used to:
- * 1. Hide system UI (status bar and navigation bar) to prevent gesture navigation
- * 2. Lock screen orientation (when not set to FOLLOW_SYSTEM)
+ * Fullscreen Activity that hosts the touch-blocking overlay.
  * 
  * Why an Activity is required:
- * TYPE_APPLICATION_OVERLAY windows cannot hide system UI or lock orientation due to Android
- * security restrictions. Only Activities can use window.decorView.systemUiVisibility and
- * requestedOrientation to control these behaviors.
+ * - TYPE_APPLICATION_OVERLAY windows cannot hide system UI or lock orientation
+ * - Only Activities can control window.decorView.systemUiVisibility and requestedOrientation
+ * 
+ * Architecture:
+ * - This Activity IS the overlay (not a separate WindowManager overlay)
+ * - Simplified lifecycle: Activity lifecycle = Overlay lifecycle
+ * - No WindowManager complexity
  * 
  * Lifecycle:
- * - Started when lock is enabled (always, regardless of orientation mode)
+ * - Started by LockOverlayService when lock is enabled
  * - Finishes when lock is disabled via ACTION_STOP broadcast
- * - The overlay is shown on top of this Activity to block touches
  */
-class OrientationLockActivity : Activity() {
+class OverlayActivity : Activity() {
+
+    private var overlayView: OverlayView? = null
 
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -41,7 +44,7 @@ class OrientationLockActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Set orientation based on intent extra
+        // Extract configuration from intent
         val orientationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE, OrientationMode::class.java)
         } else {
@@ -49,11 +52,29 @@ class OrientationLockActivity : Activity() {
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE) as? OrientationMode
         } ?: OrientationMode.FOLLOW_SYSTEM
         
+        val debugTintVisible = intent.getBooleanExtra(EXTRA_DEBUG_TINT, false)
+        
+        // Set screen orientation
         requestedOrientation = when (orientationMode) {
             OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
+        
+        // Create and set the overlay as the Activity's content view
+        overlayView = OverlayView(
+            context = this,
+            onUnlockRequested = {
+                // Notify service to unlock via broadcast
+                sendBroadcast(Intent(ACTION_UNLOCK_REQUESTED))
+                finish()
+            },
+            onDoubleTapDetected = {
+                // TODO: Show unlock handle when implemented
+            },
+            debugTintVisible = debugTintVisible
+        )
+        setContentView(overlayView)
         
         // Register receiver to listen for stop signal
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -67,13 +88,12 @@ class OrientationLockActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // Hide system UI after window is fully initialized
-        // window.insetsController is available after onResume()
         hideSystemUI()
     }
     
     /**
-     * Hides system UI following Android documentation recommendations.
-     * Uses window.decorView as per official guidance.
+     * Hides system UI (status bar and navigation bar) using immersive mode.
+     * Follows Android documentation recommendations using window.decorView.
      */
     @Suppress("DEPRECATION")
     private fun hideSystemUI() {
@@ -84,7 +104,7 @@ class OrientationLockActivity : Activity() {
                 controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } else {
-            // Android 10 and below: Use decorView systemUiVisibility as per Android docs
+            // Android 10 and below: Use decorView systemUiVisibility
             window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                     or View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -96,7 +116,7 @@ class OrientationLockActivity : Activity() {
     
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        // Re-hide system UI when window regains focus (e.g., after notification shade is closed)
+        // Re-hide system UI when window regains focus (e.g., after notification shade)
         if (hasFocus) {
             hideSystemUI()
         }
@@ -104,6 +124,8 @@ class OrientationLockActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        overlayView?.cleanup()
+        overlayView = null
         try {
             unregisterReceiver(stopReceiver)
         } catch (e: IllegalArgumentException) {
@@ -119,14 +141,19 @@ class OrientationLockActivity : Activity() {
 
     companion object {
         private const val EXTRA_ORIENTATION_MODE = "orientation_mode"
+        private const val EXTRA_DEBUG_TINT = "debug_tint"
         
-        const val ACTION_START = "com.tenmilelabs.touchlock.ORIENTATION_LOCK_START"
-        const val ACTION_STOP = "com.tenmilelabs.touchlock.ORIENTATION_LOCK_STOP"
+        const val ACTION_STOP = "com.tenmilelabs.touchlock.OVERLAY_STOP"
+        const val ACTION_UNLOCK_REQUESTED = "com.tenmilelabs.touchlock.UNLOCK_REQUESTED"
         
-        fun createStartIntent(context: Context, orientationMode: OrientationMode): Intent {
-            return Intent(context, OrientationLockActivity::class.java).apply {
-                action = ACTION_START
+        fun createStartIntent(
+            context: Context,
+            orientationMode: OrientationMode,
+            debugTintVisible: Boolean = false
+        ): Intent {
+            return Intent(context, OverlayActivity::class.java).apply {
                 putExtra(EXTRA_ORIENTATION_MODE, orientationMode)
+                putExtra(EXTRA_DEBUG_TINT, debugTintVisible)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }

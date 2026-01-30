@@ -1,12 +1,14 @@
 package com.tenmilelabs.touchlock.service
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -35,6 +37,15 @@ class LockOverlayService : LifecycleService() {
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
+    
+    // Receiver for unlock requests from OverlayActivity
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED) {
+                stopLock()
+            }
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -59,6 +70,21 @@ class LockOverlayService : LifecycleService() {
 
     private fun initService() {
         if (isServiceRunning) return
+
+        // Register receiver for unlock requests from OverlayActivity
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                unlockReceiver,
+                IntentFilter(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED),
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(
+                unlockReceiver,
+                IntentFilter(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_UNLOCK_REQUESTED)
+            )
+        }
 
         // When targeting Android 14+ (API 34+), foreground service type is mandatory
         // Use the 3-parameter version for all API levels to satisfy target SDK requirements
@@ -99,23 +125,17 @@ class LockOverlayService : LifecycleService() {
             val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
                 ?: OrientationMode.FOLLOW_SYSTEM
             
-            // Always start the transparent Activity to:
-            // 1. Hide system UI (status bar and navigation bar)
-            // 2. Lock screen orientation (if not FOLLOW_SYSTEM)
-            // Note: TYPE_APPLICATION_OVERLAY windows cannot hide system UI,
-            // so we need an Activity window to control system UI visibility.
-            val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
+            // Start the OverlayActivity which hosts the touch-blocking overlay
+            // The Activity handles:
+            // 1. System UI hiding (status bar and navigation bar)
+            // 2. Screen orientation locking
+            // 3. Touch interception via OverlayView
+            val intent = com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.createStartIntent(
                 this@LockOverlayService,
-                orientationMode
+                orientationMode,
+                debugOverlayVisible
             )
             startActivity(intent)
-            
-            // Small delay to let activity start before showing overlay
-            handler.postDelayed({
-                overlayController.show(orientationMode, debugOverlayVisible) {
-                    stopLock()
-                }
-            }, 100)
 
             // Reassert foreground state with locked notification
             assertForegroundState(notificationManager.buildLockedNotification())
@@ -126,11 +146,9 @@ class LockOverlayService : LifecycleService() {
 
     private fun stopLock() {
         if (_lockState.value == LockState.Unlocked) return
-
-        overlayController.hide()
         
-        // Always finish the Activity to restore system UI and unlock orientation
-        finishOrientationLockActivity()
+        // Finish the OverlayActivity to remove the overlay and restore system UI
+        finishOverlayActivity()
 
         // Reassert foreground state with unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
@@ -138,9 +156,9 @@ class LockOverlayService : LifecycleService() {
         _lockState.value = LockState.Unlocked
     }
     
-    private fun finishOrientationLockActivity() {
-        // Send broadcast to finish the Activity, which restores system UI
-        val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
+    private fun finishOverlayActivity() {
+        // Send broadcast to finish the Activity
+        val intent = Intent(com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.ACTION_STOP)
         sendBroadcast(intent)
     }
 
@@ -153,10 +171,16 @@ class LockOverlayService : LifecycleService() {
             val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
                 ?: OrientationMode.FOLLOW_SYSTEM
             
-            overlayController.hide()
-            overlayController.show(orientationMode, debugOverlayVisible) {
-                stopLock()
-            }
+            // Restart the OverlayActivity with updated debug settings
+            finishOverlayActivity()
+            handler.postDelayed({
+                val intent = com.tenmilelabs.touchlock.platform.overlay.OverlayActivity.createStartIntent(
+                    this@LockOverlayService,
+                    orientationMode,
+                    debugOverlayVisible
+                )
+                startActivity(intent)
+            }, 100) // Small delay to let the old activity finish
         }
     }
 
@@ -279,17 +303,24 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun dismissService() {
-        overlayController.hide()
+        finishOverlayActivity()
+        overlayController.hideCountdownOverlay() // Clean up countdown if present
         stopForeground(STOP_FOREGROUND_REMOVE)
         _lockState.value = LockState.Unlocked
         isServiceRunning = false
         stopSelf()
     }
 
-    // Defensive stop. Prevents rare window leaks.
+    // Defensive cleanup. Prevents rare window leaks.
     override fun onDestroy() {
         handler.removeCallbacks(countdownRunnable)
-        overlayController.hide()
+        finishOverlayActivity()
+        overlayController.hideCountdownOverlay()
+        try {
+            unregisterReceiver(unlockReceiver)
+        } catch (e: IllegalArgumentException) {
+            // Receiver not registered or already unregistered
+        }
         super.onDestroy()
     }
 
