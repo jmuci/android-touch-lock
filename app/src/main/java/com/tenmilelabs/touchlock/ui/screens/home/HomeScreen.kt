@@ -84,7 +84,7 @@ fun HomeScreen(
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
-        anScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged,
+        onScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged,
         onDebugOverlayVisibleChanged = viewModel::onDebugOverlayVisibleChanged
     )
 }
@@ -103,7 +103,7 @@ internal fun HomeScreenContent(
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
-    anScreenRotationSettingChanged: (OrientationMode) -> Unit,
+    onScreenRotationSettingChanged: (OrientationMode) -> Unit,
     onDebugOverlayVisibleChanged: (Boolean) -> Unit
 ) {
     Column(
@@ -174,7 +174,7 @@ internal fun HomeScreenContent(
                         SettingsCard(
                             modifier = Modifier.weight(1f),
                             currentOrientationMode = currentOrientationMode,
-                            onScreenRotationSettingChanged = anScreenRotationSettingChanged
+                            onScreenRotationSettingChanged = onScreenRotationSettingChanged
                         )
                         UsageTimerCard(
                             modifier = Modifier.weight(1f),
@@ -187,7 +187,7 @@ internal fun HomeScreenContent(
                         SettingsCard(
                             modifier = Modifier.padding(vertical = 16.dp),
                             currentOrientationMode = currentOrientationMode,
-                            onScreenRotationSettingChanged = anScreenRotationSettingChanged
+                            onScreenRotationSettingChanged = onScreenRotationSettingChanged
                         )
                         UsageTimerCard(
                             modifier = Modifier.padding(vertical = 16.dp),
@@ -389,7 +389,7 @@ fun SettingsCard(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = currentOrientationMode.title,
+                    text = stringResource(currentOrientationMode.titleRes),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -409,7 +409,7 @@ fun SettingsCard(
                                 onScreenRotationSettingChanged(orientation)
                                 expanded = false
                             },
-                            text = { Text(text = orientation.title) }
+                            text = { Text(text = stringResource(orientation.titleRes)) }
                         )
                     }
                 }
@@ -522,7 +522,7 @@ fun DebugOverlayCard(
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {},
+                onScreenRotationSettingChanged = {},
                 onDebugOverlayVisibleChanged = {}
             )
         }
@@ -545,7 +545,7 @@ fun DebugOverlayCard(
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {},
+                onScreenRotationSettingChanged = {},
                 onDebugOverlayVisibleChanged = {}
             )
         }
@@ -579,7 +579,7 @@ fun DebugOverlayCard(
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {},
+                onScreenRotationSettingChanged = {},
                 onDebugOverlayVisibleChanged = {}
             )
         }
@@ -602,7 +602,7 @@ fun DebugOverlayCard(
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
-                anScreenRotationSettingChanged = {},
+                onScreenRotationSettingChanged = {},
                 onDebugOverlayVisibleChanged = {}
             )
         }

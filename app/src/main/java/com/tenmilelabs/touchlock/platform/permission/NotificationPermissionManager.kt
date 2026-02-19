@@ -3,7 +3,6 @@ package com.tenmilelabs.touchlock.platform.permission
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.tenmilelabs.touchlock.R
@@ -49,13 +48,8 @@ class NotificationPermissionManager @Inject constructor(
 
     /**
      * Checks if the Touch Lock notification channel is available and visible.
-     * Only relevant on API 26+ where channels exist.
      */
     private fun isChannelAvailable(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return true
-        }
-
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = notificationManager.getNotificationChannel(LockNotificationManager.CHANNEL_ID)
@@ -80,22 +74,12 @@ class NotificationPermissionManager @Inject constructor(
 
     /**
      * Creates an intent to open notification settings for the app.
-     * On API 26+, this opens the app notification settings showing all channels.
-     * Below API 26, opens app details settings.
+     * Opens the app notification settings showing all channels.
      */
     fun createNotificationSettingsIntent(): Intent {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Open app notification settings (includes all channels)
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        } else {
-            // Fallback for pre-Oreo devices
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = android.net.Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+        return Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }
 
@@ -108,7 +92,7 @@ class NotificationPermissionManager @Inject constructor(
                 context.getString(R.string.notifications_disabled_availability)
             }
 
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isChannelAvailable() -> {
+            !isChannelAvailable() -> {
                 context.getString(R.string.notifications_availability_channel_blocked)
             }
 

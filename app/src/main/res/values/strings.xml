@@ -37,6 +37,11 @@
     <string name="notification_countdown_title">Touch Lock countdown</string>
     <string name="notification_countdown_text">Locking in %d seconds…</string>
 
+    <!-- Orientation Modes -->
+    <string name="orientation_portrait">Portrait</string>
+    <string name="orientation_landscape">Landscape</string>
+    <string name="orientation_auto">Auto</string>
+
     <!-- UI Strings -->
     <string name="enable_notifications">Enable Notifications</string>
     <string name="time_locked_today">Time locked today</string>
