@@ -91,14 +91,16 @@ class LockOverlayService : LifecycleService() {
 
     private fun startLock() {
         Timber.d("startLock() called")
-        if (!isServiceRunning) {
-            initService()
-        }
 
         if (_lockState.value == LockState.Locked) return
 
         if (!permissionManager.hasPermission()) {
+            Timber.w("Cannot start lock: overlay permission not granted")
             return
+        }
+
+        if (!isServiceRunning) {
+            initService()
         }
 
         // Get current orientation mode and apply it
@@ -212,9 +214,6 @@ class LockOverlayService : LifecycleService() {
      */
     private fun startDelayedLock() {
         Timber.d("startDelayedLock() called")
-        if (!isServiceRunning) {
-            initService()
-        }
 
         // Cancel any existing countdown
         cancelCountdown()
@@ -223,7 +222,12 @@ class LockOverlayService : LifecycleService() {
         if (_lockState.value == LockState.Locked) return
 
         if (!permissionManager.hasPermission()) {
+            Timber.w("Cannot start delayed lock: overlay permission not granted")
             return
+        }
+
+        if (!isServiceRunning) {
+            initService()
         }
 
         // Start countdown
