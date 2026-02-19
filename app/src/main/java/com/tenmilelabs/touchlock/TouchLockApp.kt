@@ -5,13 +5,21 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.tenmilelabs.touchlock.service.LockOverlayService
 import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
 
 @HiltAndroidApp
 class TouchLockApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        initTimber()
         startLockService()
+    }
+
+    private fun initTimber() {
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
     }
 
     /**

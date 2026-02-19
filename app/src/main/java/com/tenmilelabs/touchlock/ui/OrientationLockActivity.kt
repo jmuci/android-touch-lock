@@ -9,6 +9,7 @@ import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import timber.log.Timber
 
 /**
  * Transparent Activity used solely to lock screen orientation when Touch Lock is active.
@@ -31,7 +32,8 @@ class OrientationLockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        Timber.d("OrientationLockActivity.onCreate() called")
+
         // Set orientation based on intent extra
         val orientationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE, OrientationMode::class.java)
@@ -39,7 +41,8 @@ class OrientationLockActivity : Activity() {
             @Suppress("DEPRECATION")
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE) as? OrientationMode
         } ?: OrientationMode.FOLLOW_SYSTEM
-        
+
+        Timber.d("Setting orientation mode: $orientationMode")
         requestedOrientation = when (orientationMode) {
             OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -57,10 +60,12 @@ class OrientationLockActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        Timber.d("OrientationLockActivity.onDestroy() called, unregistering stopReceiver")
         try {
             unregisterReceiver(stopReceiver)
         } catch (e: IllegalArgumentException) {
             // Receiver already unregistered
+            Timber.d("stopReceiver already unregistered")
         }
     }
 
@@ -68,6 +73,7 @@ class OrientationLockActivity : Activity() {
     override fun onBackPressed() {
         // Prevent back button from closing this Activity
         // The overlay unlock mechanism should be used instead
+        Timber.d("onBackPressed() called - back button is disabled")
     }
 
     companion object {
