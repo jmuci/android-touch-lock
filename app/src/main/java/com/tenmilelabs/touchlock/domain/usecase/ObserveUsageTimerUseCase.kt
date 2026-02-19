@@ -1,10 +1,10 @@
 package com.tenmilelabs.touchlock.domain.usecase
 
 import com.tenmilelabs.touchlock.domain.model.LockState
+import com.tenmilelabs.touchlock.domain.model.UsageData
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 import com.tenmilelabs.touchlock.domain.repository.LockPreferencesRepository
 import com.tenmilelabs.touchlock.domain.repository.LockRepository
-import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import com.tenmilelabs.touchlock.platform.time.TimeProvider
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -163,7 +163,7 @@ class ObserveUsageTimerUseCase(
         val today = timeProvider.getCurrentDateString()
         val currentState = _timerState.value
 
-        val data = LockPreferences.UsageData(
+        val data = UsageData(
             date = today,
             accumulatedMillis = currentState.elapsedMillisToday,
             lastStartTime = when {
