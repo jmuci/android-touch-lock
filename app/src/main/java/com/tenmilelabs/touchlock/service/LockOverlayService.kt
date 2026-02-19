@@ -13,6 +13,7 @@ import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
+import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,8 +50,9 @@ class LockOverlayService : LifecycleService() {
             ACTION_DISMISS -> dismissService()
             null -> {
                 // Service restarted by system (START_STICKY)
-                // Re-initialize with idle state
-                Timber.d("onStartCommand called with null action (system restart), re-initializing")
+                // Re-initialize with idle (unlocked) state. Configuration is persisted in DataStore.
+                // This prevents unintended auto-locking after system restart while preserving settings.
+                Timber.d("onStartCommand called with null action (system restart), re-initializing to unlocked state")
                 initService()
             }
         }
@@ -91,21 +93,27 @@ class LockOverlayService : LifecycleService() {
 
     private fun startLock() {
         Timber.d("startLock() called")
-        if (!isServiceRunning) {
-            initService()
-        }
 
         if (_lockState.value == LockState.Locked) return
 
         if (!permissionManager.hasPermission()) {
+            Timber.w("Cannot start lock: overlay permission not granted")
             return
         }
 
-        // Get current orientation mode and apply it
+        // Cancel any pending countdown to prevent callbacks from firing
+        cancelCountdown()
+
+        if (!isServiceRunning) {
+            initService()
+        }
+
+        // Get current orientation mode from persistent configuration and apply it
         lifecycleScope.launch {
-            val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
                 ?: OrientationMode.FOLLOW_SYSTEM
-            
+            Timber.d("startLock: loaded orientation mode from persistent storage: $orientationMode")
+
             // Start transparent orientation lock activity if orientation is locked
             if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
                 val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
@@ -139,8 +147,11 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
+        // Cancel any pending countdown to prevent callbacks from firing
+        cancelCountdown()
+
         overlayController.hide()
-        
+
         // Finish orientation lock activity if it's running
         finishOrientationLockActivity()
 
@@ -151,9 +162,11 @@ class LockOverlayService : LifecycleService() {
     }
     
     private fun finishOrientationLockActivity() {
-        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast")
-        // Send broadcast to finish the activity
-        val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
+        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast and direct finish")
+        // Try direct finish first (immediate, no broadcast queue delay)
+        OrientationLockActivity.finishDirectly()
+        // Also send broadcast as fallback in case direct reference is stale
+        val intent = Intent(OrientationLockActivity.ACTION_STOP)
         sendBroadcast(intent)
     }
 
@@ -212,9 +225,6 @@ class LockOverlayService : LifecycleService() {
      */
     private fun startDelayedLock() {
         Timber.d("startDelayedLock() called")
-        if (!isServiceRunning) {
-            initService()
-        }
 
         // Cancel any existing countdown
         cancelCountdown()
@@ -223,7 +233,12 @@ class LockOverlayService : LifecycleService() {
         if (_lockState.value == LockState.Locked) return
 
         if (!permissionManager.hasPermission()) {
+            Timber.w("Cannot start delayed lock: overlay permission not granted")
             return
+        }
+
+        if (!isServiceRunning) {
+            initService()
         }
 
         // Start countdown

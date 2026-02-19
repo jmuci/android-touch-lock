@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import timber.log.Timber
+import java.lang.ref.WeakReference
 
 /**
  * Transparent Activity used solely to lock screen orientation when Touch Lock is active.
@@ -34,6 +35,9 @@ class OrientationLockActivity : Activity() {
         super.onCreate(savedInstanceState)
         Timber.d("OrientationLockActivity.onCreate() called")
 
+        // Register this instance for direct finish calls from service (fallback to broadcasts)
+        currentInstance = WeakReference(this)
+
         // Set orientation based on intent extra
         val orientationMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getSerializableExtra(EXTRA_ORIENTATION_MODE, OrientationMode::class.java)
@@ -48,7 +52,7 @@ class OrientationLockActivity : Activity() {
             OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
-        
+
         // Register receiver to listen for stop signal
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stopReceiver, IntentFilter(ACTION_STOP), RECEIVER_NOT_EXPORTED)
@@ -67,6 +71,11 @@ class OrientationLockActivity : Activity() {
             // Receiver already unregistered
             Timber.d("stopReceiver already unregistered")
         }
+
+        // Clear the instance reference to allow garbage collection
+        if (currentInstance?.get() === this) {
+            currentInstance = null
+        }
     }
 
     @Deprecated("Deprecated in Java")
@@ -78,10 +87,13 @@ class OrientationLockActivity : Activity() {
 
     companion object {
         private const val EXTRA_ORIENTATION_MODE = "orientation_mode"
-        
+
         const val ACTION_START = "com.tenmilelabs.touchlock.ORIENTATION_LOCK_START"
         const val ACTION_STOP = "com.tenmilelabs.touchlock.ORIENTATION_LOCK_STOP"
-        
+
+        // Weak reference to current instance for direct finish calls (fallback to broadcasts)
+        private var currentInstance: WeakReference<OrientationLockActivity>? = null
+
         fun createStartIntent(context: Context, orientationMode: OrientationMode): Intent {
             return Intent(context, OrientationLockActivity::class.java).apply {
                 action = ACTION_START
@@ -89,6 +101,15 @@ class OrientationLockActivity : Activity() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
+        }
+
+        /**
+         * Direct finish call - faster than broadcast, used as fallback if broadcast is slow.
+         * Called by the service to immediately finish the activity without waiting for broadcast delivery.
+         */
+        fun finishDirectly() {
+            currentInstance?.get()?.finish()
+            Timber.d("OrientationLockActivity.finishDirectly() called")
         }
     }
 }
