@@ -49,8 +49,9 @@ class LockOverlayService : LifecycleService() {
             ACTION_DISMISS -> dismissService()
             null -> {
                 // Service restarted by system (START_STICKY)
-                // Re-initialize with idle state
-                Timber.d("onStartCommand called with null action (system restart), re-initializing")
+                // Re-initialize with idle (unlocked) state. Configuration is persisted in DataStore.
+                // This prevents unintended auto-locking after system restart while preserving settings.
+                Timber.d("onStartCommand called with null action (system restart), re-initializing to unlocked state")
                 initService()
             }
         }
@@ -99,15 +100,19 @@ class LockOverlayService : LifecycleService() {
             return
         }
 
+        // Cancel any pending countdown to prevent callbacks from firing
+        cancelCountdown()
+
         if (!isServiceRunning) {
             initService()
         }
 
-        // Get current orientation mode and apply it
+        // Get current orientation mode from persistent configuration and apply it
         lifecycleScope.launch {
-            val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
                 ?: OrientationMode.FOLLOW_SYSTEM
-            
+            Timber.d("startLock: loaded orientation mode from persistent storage: $orientationMode")
+
             // Start transparent orientation lock activity if orientation is locked
             if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
                 val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
@@ -141,8 +146,11 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
+        // Cancel any pending countdown to prevent callbacks from firing
+        cancelCountdown()
+
         overlayController.hide()
-        
+
         // Finish orientation lock activity if it's running
         finishOrientationLockActivity()
 
