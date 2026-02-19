@@ -12,6 +12,7 @@ import android.view.WindowManager
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,7 +52,12 @@ class OverlayController @Inject constructor(
             },
             debugTintVisible = debugTintVisible
         )
-        windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
+        try {
+            windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add overlay view")
+            overlayView = null
+        }
     }
 
     fun hide() {
@@ -65,7 +71,11 @@ class OverlayController @Inject constructor(
         // Clean up main overlay
         overlayView?.let {
             it.cleanup()
-            windowManager.removeView(it)
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove overlay view")
+            }
         }
         overlayView = null
     }
@@ -81,7 +91,12 @@ class OverlayController @Inject constructor(
             updateCountdown(initialSeconds)
         }
 
-        windowManager.addView(countdownOverlayView, countdownLayoutParams())
+        try {
+            windowManager.addView(countdownOverlayView, countdownLayoutParams())
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add countdown overlay view")
+            countdownOverlayView = null
+        }
     }
 
     /**
@@ -96,7 +111,11 @@ class OverlayController @Inject constructor(
      */
     fun hideCountdownOverlay() {
         countdownOverlayView?.let {
-            windowManager.removeView(it)
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove countdown overlay view")
+            }
         }
         countdownOverlayView = null
     }
@@ -110,7 +129,13 @@ class OverlayController @Inject constructor(
             onUnlockRequested()
         }
 
-        windowManager.addView(unlockHandleView, handleLayoutParams())
+        try {
+            windowManager.addView(unlockHandleView, handleLayoutParams())
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add unlock handle view")
+            unlockHandleView = null
+            return
+        }
 
         // Auto-hide after timeout
         handler.postDelayed(hideHandleRunnable, HANDLE_VISIBILITY_TIMEOUT_MS)
@@ -119,7 +144,11 @@ class OverlayController @Inject constructor(
     private fun hideUnlockHandle() {
         unlockHandleView?.let {
             it.cleanup()
-            windowManager.removeView(it)
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove unlock handle view")
+            }
         }
         unlockHandleView = null
         handler.removeCallbacks(hideHandleRunnable)

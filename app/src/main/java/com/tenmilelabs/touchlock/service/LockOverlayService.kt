@@ -35,6 +35,7 @@ class LockOverlayService : LifecycleService() {
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
+    private var showOverlayRunnable: Runnable? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -123,11 +124,12 @@ class LockOverlayService : LifecycleService() {
                 startActivity(intent)
                 
                 // Small delay to let activity start before showing overlay
-                handler.postDelayed({
+                showOverlayRunnable = Runnable {
                     overlayController.show(orientationMode, debugOverlayVisible) {
                         stopLock()
                     }
-                }, 100)
+                }
+                handler.postDelayed(showOverlayRunnable!!, 100)
             } else {
                 // No orientation locking needed, show overlay directly
                 overlayController.show(orientationMode, debugOverlayVisible) {
@@ -147,8 +149,10 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
-        // Cancel any pending countdown to prevent callbacks from firing
+        // Cancel any pending countdown and delayed overlay show to prevent callbacks from firing
         cancelCountdown()
+        showOverlayRunnable?.let { handler.removeCallbacks(it) }
+        showOverlayRunnable = null
 
         overlayController.hide()
 
@@ -330,9 +334,12 @@ class LockOverlayService : LifecycleService() {
     // Defensive stop. Prevents rare window leaks.
     override fun onDestroy() {
         Timber.d("onDestroy() called")
-        Timber.d("Cleaning up: removing callbacks and hiding overlay")
+        Timber.d("Cleaning up: removing callbacks, hiding overlay, and finishing orientation activity")
         handler.removeCallbacks(countdownRunnable)
+        showOverlayRunnable?.let { handler.removeCallbacks(it) }
+        showOverlayRunnable = null
         overlayController.hide()
+        finishOrientationLockActivity()
         Timber.d("Service destroyed")
         super.onDestroy()
     }

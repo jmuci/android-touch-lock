@@ -52,6 +52,10 @@ class MainActivity : ComponentActivity() {
         val restoreIntent = Intent(this, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_RESTORE_NOTIFICATION
         }
-        startService(restoreIntent)
+        try {
+            startService(restoreIntent)
+        } catch (e: IllegalStateException) {
+            Timber.w(e, "Could not restore notification - service may not be running")
+        }
     }
 }
