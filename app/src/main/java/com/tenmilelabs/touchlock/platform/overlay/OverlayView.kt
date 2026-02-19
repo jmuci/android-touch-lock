@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.widget.FrameLayout
+import timber.log.Timber
 
 /**
  * Full-screen overlay that blocks all touch input.
@@ -39,6 +40,7 @@ class OverlayView(
     }
 
     init {
+        Timber.d("OverlayView.init() called, debugTintVisible: $debugTintVisible")
         // Debug-only: Apply visible tint to confirm overlay is attached (for lifecycle debugging)
         if (debugTintVisible) {
             setBackgroundColor(Color.argb(13, 255, 0, 0)) // ~5% red tint
@@ -62,6 +64,7 @@ class OverlayView(
 
                 if (timeSinceLastTap < DOUBLE_TAP_TIMEOUT_MS) {
                     tapCount++
+                    Timber.d("Tap detected, tapCount: $tapCount")
                     if (tapCount >= 2) {
                         // Double-tap detected!
                         handler.removeCallbacks(doubleTapResetRunnable)
@@ -80,6 +83,7 @@ class OverlayView(
 
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
+                Timber.d("OverlayView.onTouchEvent ${if (event.actionMasked == MotionEvent.ACTION_UP) "ACTION_UP" else "ACTION_CANCEL"}")
                 handler.removeCallbacks(longPressRunnable)
             }
         }
@@ -87,6 +91,7 @@ class OverlayView(
     }
 
     fun cleanup() {
+        Timber.d("OverlayView.cleanup() called")
         handler.removeCallbacks(longPressRunnable)
         handler.removeCallbacks(doubleTapResetRunnable)
     }

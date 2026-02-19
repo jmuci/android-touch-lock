@@ -9,6 +9,7 @@ import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
 import com.tenmilelabs.touchlock.ui.screens.home.HomeScreen
 import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Timber.d("MainActivity.onCreate() called")
 
         setContent {
             val viewModel: HomeViewModel = hiltViewModel()
@@ -29,9 +31,11 @@ class MainActivity : ComponentActivity() {
             HomeScreen(
                 viewModel = viewModel,
                 onRequestOverlayPermission = {
+                    Timber.d("onRequestOverlayPermission clicked, starting settings")
                     startActivity(overlayPermissionManager.createSettingsIntent())
                 },
                 onRequestNotificationPermission = {
+                    Timber.d("onRequestNotificationPermission clicked, starting settings")
                     startActivity(notificationPermissionManager.createNotificationSettingsIntent())
                 }
             )

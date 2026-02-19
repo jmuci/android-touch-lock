@@ -5,8 +5,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -20,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -38,7 +37,7 @@ class LockOverlayService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        Log.d("TouchLock", "onStartCommand called with action: ${intent?.action}")
+        Timber.d("onStartCommand called with action: ${intent?.action}, startId: $startId")
         when (intent?.action) {
             ACTION_INIT -> initService()
             ACTION_START -> startLock()
@@ -51,6 +50,7 @@ class LockOverlayService : LifecycleService() {
             null -> {
                 // Service restarted by system (START_STICKY)
                 // Re-initialize with idle state
+                Timber.d("onStartCommand called with null action (system restart), re-initializing")
                 initService()
             }
         }
@@ -60,6 +60,7 @@ class LockOverlayService : LifecycleService() {
     private fun initService() {
         if (isServiceRunning) return
 
+        Timber.d("Starting foreground service with unlocked notification")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -74,7 +75,8 @@ class LockOverlayService : LifecycleService() {
         }
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
-        
+        Timber.d("Service initialized: isServiceRunning=$isServiceRunning, lockState=${_lockState.value}")
+
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
             configRepository.observeDebugOverlayVisible().collect { visible ->
@@ -88,6 +90,7 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun startLock() {
+        Timber.d("startLock() called")
         if (!isServiceRunning) {
             initService()
         }
@@ -132,6 +135,8 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun stopLock() {
+        Timber.d("stopLock() called")
+
         if (_lockState.value == LockState.Unlocked) return
 
         overlayController.hide()
@@ -146,6 +151,7 @@ class LockOverlayService : LifecycleService() {
     }
     
     private fun finishOrientationLockActivity() {
+        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast")
         // Send broadcast to finish the activity
         val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
         sendBroadcast(intent)
@@ -156,8 +162,9 @@ class LockOverlayService : LifecycleService() {
      * Used when debug overlay visibility flag changes while locked.
      */
     private fun recreateOverlay() {
+        Timber.d("recreateOverlay() called")
         lifecycleScope.launch {
-            val orientationMode = configRepository.observeOrientationMode().firstOrNull() 
+            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
                 ?: OrientationMode.FOLLOW_SYSTEM
             
             overlayController.hide()
@@ -172,6 +179,7 @@ class LockOverlayService : LifecycleService() {
      * Called when user taps the notification body.
      */
     private fun toggleLock() {
+        Timber.d("toggleLock() called, current state: ${_lockState.value}")
         when (_lockState.value) {
             LockState.Unlocked -> startLock()
             LockState.Locked -> stopLock()
@@ -183,6 +191,7 @@ class LockOverlayService : LifecycleService() {
      * Called when the app comes to foreground to ensure notification visibility.
      */
     private fun restoreNotification() {
+        Timber.d("restoreNotification() called")
         if (!isServiceRunning) {
             initService()
             return
@@ -202,6 +211,7 @@ class LockOverlayService : LifecycleService() {
      * Shows countdown overlay and schedules lock after delay.
      */
     private fun startDelayedLock() {
+        Timber.d("startDelayedLock() called")
         if (!isServiceRunning) {
             initService()
         }
@@ -252,6 +262,7 @@ class LockOverlayService : LifecycleService() {
             if (!isCountdownActive) return
 
             countdownSecondsRemaining--
+            Timber.d("Countdown tick: $countdownSecondsRemaining seconds remaining")
 
             if (countdownSecondsRemaining > 0) {
                 // Update countdown display
@@ -264,6 +275,7 @@ class LockOverlayService : LifecycleService() {
                 handler.postDelayed(this, 1000)
             } else {
                 // Countdown complete - engage lock
+                Timber.d("Countdown complete (0 seconds), engaging lock")
                 isCountdownActive = false
                 overlayController.hideCountdownOverlay()
                 startLock()
@@ -291,18 +303,34 @@ class LockOverlayService : LifecycleService() {
     }
 
     private fun dismissService() {
+        Timber.d("dismissService() called: Hiding overlay, stopping foreground, and stopping self")
         overlayController.hide()
         stopForeground(STOP_FOREGROUND_REMOVE)
         _lockState.value = LockState.Unlocked
         isServiceRunning = false
         stopSelf()
+        Timber.d("Service dismissed")
     }
 
     // Defensive stop. Prevents rare window leaks.
     override fun onDestroy() {
+        Timber.d("onDestroy() called")
+        Timber.d("Cleaning up: removing callbacks and hiding overlay")
         handler.removeCallbacks(countdownRunnable)
         overlayController.hide()
+        Timber.d("Service destroyed")
         super.onDestroy()
+    }
+
+    // Log service binding
+    override fun onUnbind(intent: Intent?): Boolean {
+        Timber.d("onUnbind() called with intent action: ${intent?.action}")
+        return super.onUnbind(intent)
+    }
+
+    override fun onRebind(intent: Intent?) {
+        Timber.d("onRebind() called with intent action: ${intent?.action}")
+        super.onRebind(intent)
     }
 
     companion object {

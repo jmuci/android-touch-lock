@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.tenmilelabs.touchlock.R
+import timber.log.Timber
 
 /**
  * A small, square overlay that appears after double-tap.
@@ -34,6 +35,7 @@ class UnlockHandleView(
     }
 
     init {
+        Timber.d("UnlockHandleView.init() called, size: ${HANDLE_SIZE_DP}dp")
         orientation = VERTICAL
         gravity = Gravity.CENTER
         isClickable = true
@@ -81,6 +83,7 @@ class UnlockHandleView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                Timber.d("UnlockHandleView.onTouchEvent ACTION_DOWN, starting long-press timer (${PRESS_AND_HOLD_DURATION_MS}ms)")
                 longPressTriggered = false
                 handler.postDelayed(longPressRunnable, PRESS_AND_HOLD_DURATION_MS)
                 // Visual feedback
@@ -89,6 +92,7 @@ class UnlockHandleView(
 
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
+                Timber.d("UnlockHandleView.onTouchEvent ${if (event.actionMasked == MotionEvent.ACTION_UP) "ACTION_UP" else "ACTION_CANCEL"}, longPressTriggered: $longPressTriggered")
                 handler.removeCallbacks(longPressRunnable)
                 alpha = 1f
             }
@@ -97,6 +101,7 @@ class UnlockHandleView(
     }
 
     fun cleanup() {
+        Timber.d("UnlockHandleView.cleanup() called")
         handler.removeCallbacks(longPressRunnable)
     }
 

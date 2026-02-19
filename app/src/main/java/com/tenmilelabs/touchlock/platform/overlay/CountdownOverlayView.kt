@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.tenmilelabs.touchlock.R
+import timber.log.Timber
 
 /**
  * A non-blocking overlay that displays countdown timer.
@@ -20,6 +21,7 @@ class CountdownOverlayView(context: Context) : LinearLayout(context) {
     private val countdownText: TextView
 
     init {
+        Timber.d("CountdownOverlayView.init() called")
         orientation = VERTICAL
         gravity = Gravity.CENTER
         isClickable = false  // IMPORTANT: Don't consume touches
@@ -59,6 +61,7 @@ class CountdownOverlayView(context: Context) : LinearLayout(context) {
      * @param seconds Remaining seconds to display
      */
     fun updateCountdown(seconds: Int) {
+        Timber.d("CountdownOverlayView.updateCountdown($seconds)")
         countdownText.text = seconds.toString()
     }
 
