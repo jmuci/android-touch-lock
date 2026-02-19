@@ -23,7 +23,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -47,7 +48,6 @@ android {
         kotlinCompilerExtensionVersion = "1.5.1"
     }
     buildFeatures {
-        viewBinding = true
         buildConfig = true
     }
     packaging {
@@ -93,12 +93,7 @@ dependencies {
 
     // Coil Image Loader
     implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
     testImplementation(libs.coil.test)
-
-    // Network clients
-    implementation(libs.squareup.retrofit)
-    implementation(libs.squareup.okhttp)
 
     // Android Studio Preview support
     implementation(libs.androidx.material.icons.extended)
