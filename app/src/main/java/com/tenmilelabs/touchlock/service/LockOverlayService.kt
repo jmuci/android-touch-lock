@@ -13,6 +13,7 @@ import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
+import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -161,9 +162,11 @@ class LockOverlayService : LifecycleService() {
     }
     
     private fun finishOrientationLockActivity() {
-        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast")
-        // Send broadcast to finish the activity
-        val intent = Intent(com.tenmilelabs.touchlock.ui.OrientationLockActivity.ACTION_STOP)
+        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast and direct finish")
+        // Try direct finish first (immediate, no broadcast queue delay)
+        OrientationLockActivity.finishDirectly()
+        // Also send broadcast as fallback in case direct reference is stale
+        val intent = Intent(OrientationLockActivity.ACTION_STOP)
         sendBroadcast(intent)
     }
 
