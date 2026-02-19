@@ -29,6 +29,18 @@
     <string name="notifications_disabled_availability">Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.</string>
     <string name="notifications_availability_channel_blocked">The Touch Lock notification channel is blocked. Enable it to lock/unlock from the notification drawer.</string>
     <string name="notifications_availability_enabled">Notifications are working correctly.</string>
+    <!-- Notification Strings -->
+    <string name="notification_unlocked_title">Touch Lock ready</string>
+    <string name="notification_unlocked_text">Tap to lock</string>
+    <string name="notification_locked_title">Touch Lock active</string>
+    <string name="notification_locked_text">Tap to unlock</string>
+    <string name="notification_countdown_title">Touch Lock countdown</string>
+    <string name="notification_countdown_text">Locking in %d seconds…</string>
+
+    <!-- UI Strings -->
+    <string name="enable_notifications">Enable Notifications</string>
+    <string name="time_locked_today">Time locked today</string>
+
     <string name="transparent_black_AA">#AA000000</string>
     <string name="countdown_overlay_locking">Locking...</string>
     <string name="unlock_handle_press_and_hold_to_unlock">Press and\nhold to\nunlock</string>

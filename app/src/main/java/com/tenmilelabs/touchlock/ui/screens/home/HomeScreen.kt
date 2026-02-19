@@ -313,7 +313,7 @@ fun NotificationWarningCard(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Enable Notifications")
+                Text(stringResource(R.string.enable_notifications))
             }
         }
     }
@@ -445,7 +445,7 @@ fun UsageTimerCard(
                 }
             )
             Text(
-                text = "Time locked today",
+                text = stringResource(R.string.time_locked_today),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
