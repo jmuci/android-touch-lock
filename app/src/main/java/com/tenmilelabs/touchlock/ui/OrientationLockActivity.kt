@@ -1,6 +1,5 @@
 package com.tenmilelabs.touchlock.ui
 
-import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,6 +7,8 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import timber.log.Timber
 import java.lang.ref.WeakReference
@@ -21,7 +22,7 @@ import java.lang.ref.WeakReference
  * 
  * The overlay is shown on top of this Activity to block touches.
  */
-class OrientationLockActivity : Activity() {
+class OrientationLockActivity : ComponentActivity() {
 
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -53,6 +54,13 @@ class OrientationLockActivity : Activity() {
             OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
 
+        // Disable back button - unlock via overlay mechanism instead
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                Timber.d("Back button pressed - disabled during orientation lock")
+            }
+        })
+
         // Register receiver to listen for stop signal
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stopReceiver, IntentFilter(ACTION_STOP), RECEIVER_NOT_EXPORTED)
@@ -76,13 +84,6 @@ class OrientationLockActivity : Activity() {
         if (currentInstance?.get() === this) {
             currentInstance = null
         }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // Prevent back button from closing this Activity
-        // The overlay unlock mechanism should be used instead
-        Timber.d("onBackPressed() called - back button is disabled")
     }
 
     companion object {
