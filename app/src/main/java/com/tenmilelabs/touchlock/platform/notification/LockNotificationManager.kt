@@ -47,6 +47,7 @@ class LockNotificationManager @Inject constructor(
             .setOnlyAlertOnce(true)
             .setContentIntent(togglePendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false) // Prevent dismissal on tap
             .build()
     }
 
@@ -71,6 +72,7 @@ class LockNotificationManager @Inject constructor(
             .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setOngoing(true)
+            .setAutoCancel(false) // Prevent dismissal on tap
             .build()
     }
 
@@ -95,6 +97,7 @@ class LockNotificationManager @Inject constructor(
             .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setOngoing(true)
+            .setAutoCancel(false) // Prevent dismissal on tap
             .build()
     }
 
