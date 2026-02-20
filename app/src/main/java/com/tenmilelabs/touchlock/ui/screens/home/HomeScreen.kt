@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tenmilelabs.touchlock.BuildConfig
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
@@ -79,8 +79,6 @@ fun HomeScreen(
         currentOrientationMode = uiState.orientationMode,
         usageTimer = uiState.usageTimer,
         debugOverlayVisible = uiState.debugOverlayVisible,
-        onEnableClicked = viewModel::onEnableClicked,
-        onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
@@ -98,8 +96,6 @@ internal fun HomeScreenContent(
     currentOrientationMode: OrientationMode,
     usageTimer: UsageTimerState,
     debugOverlayVisible: Boolean,
-    onEnableClicked: () -> Unit,
-    onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -156,7 +152,6 @@ internal fun HomeScreenContent(
                 modifier = Modifier
                     .padding(vertical = 16.dp)
                     .testTag("locked_state_indicator"),
-                onDisableClicked = onDisableClicked
             )
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
@@ -235,7 +230,6 @@ internal fun HomeScreenContent(
 @Composable
 fun ActiveLockInstructionsCard(
     modifier: Modifier,
-    onDisableClicked: () -> Unit
 ) {
     Surface(
         shadowElevation = 4.dp,
@@ -517,8 +511,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -540,8 +532,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.PORTRAIT,
                 usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -557,7 +547,6 @@ fun DebugOverlayCard(
         MaterialTheme {
             ActiveLockInstructionsCard(
                 modifier = Modifier.padding(16.dp),
-                onDisableClicked = {}
             )
         }
     }
@@ -574,8 +563,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.LANDSCAPE,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -597,8 +584,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},

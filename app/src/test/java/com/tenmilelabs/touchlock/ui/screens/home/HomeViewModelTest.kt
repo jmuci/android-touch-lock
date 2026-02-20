@@ -13,8 +13,6 @@ import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
@@ -78,8 +76,6 @@ class HomeViewModelTest {
             observeLockState = ObserveLockStateUseCase(lockRepository),
             observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
             observeUsageTimer = observeUsageTimerUseCase,
-            startLock = StartLockUseCase(lockRepository),
-            stopLock = StopLockUseCase(lockRepository),
             startDelayedLock = StartDelayedLockUseCase(lockRepository),
             setOrientationMode = SetOrientationModeUseCase(configRepository),
             restoreNotification = RestoreNotificationUseCase(lockRepository),
@@ -227,24 +223,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `onEnableClicked calls startLock on repository`() {
-        assertThat(lockRepository.startLockCallCount).isEqualTo(0)
-
-        viewModel.onEnableClicked()
-
-        assertThat(lockRepository.startLockCallCount).isEqualTo(1)
-    }
-
-    @Test
-    fun `onDisableClicked calls stopLock on repository`() {
-        assertThat(lockRepository.stopLockCallCount).isEqualTo(0)
-
-        viewModel.onDisableClicked()
-
-        assertThat(lockRepository.stopLockCallCount).isEqualTo(1)
-    }
-
-    @Test
     fun `onDelayedLockClicked calls startDelayedLock on repository`() {
         assertThat(lockRepository.startDelayedLockCallCount).isEqualTo(0)
 
@@ -301,8 +279,6 @@ class HomeViewModelTest {
         observeLockState = ObserveLockStateUseCase(lockRepository),
         observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
         observeUsageTimer = observeUsageTimerUseCase,
-        startLock = StartLockUseCase(lockRepository),
-        stopLock = StopLockUseCase(lockRepository),
         startDelayedLock = StartDelayedLockUseCase(lockRepository),
         setOrientationMode = SetOrientationModeUseCase(configRepository),
         restoreNotification = RestoreNotificationUseCase(lockRepository),

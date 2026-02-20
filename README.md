@@ -70,6 +70,19 @@ These constraints are intentional and align with Android platform and Play Store
 
 ---
 
+## 📚 Technical Documentation
+
+For comprehensive guides on architecture, debugging, and development:
+
+- **[Architecture Guide](docs/ARCHITECTURE.md)** – Complete system design, component details, and patterns
+- **[Debugging Guide](docs/DEBUGGING_GUIDE.md)** – Troubleshooting, common issues, and testing scenarios
+- **[Timber Logging Reference](docs/TIMBER_LOGGING.md)** – Debug logging reference and logcat tips
+- **[Documentation Index](docs/README.md)** – Quick start guide and full navigation
+
+See **[docs/README.md](docs/README.md)** for a complete index and quick navigation.
+
+---
+
 ## Learnings and Trade Offs
 
 - See this dedicated document [learnings](docs/learnings.md)
@@ -204,7 +217,9 @@ di/            → Hilt modules
 
 ## 🔮 Future Enhancements (Out of Scope for MVP)
 
-- PIN or pattern-based unlock
+- PIN, biometric or pattern-based unlock
+
+- Vibrate on unlock and Snackbar or notification.
      
 - Usage statistics
     

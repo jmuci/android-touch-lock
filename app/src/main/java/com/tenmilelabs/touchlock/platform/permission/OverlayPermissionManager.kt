@@ -25,10 +25,4 @@ class OverlayPermissionManager @Inject constructor(
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }
-
-    fun requirePermission(context: Context) {
-        if (!hasPermission()) {
-            context.startActivity(createSettingsIntent())
-        }
-    }
 }

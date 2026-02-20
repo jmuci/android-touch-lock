@@ -2,8 +2,6 @@ package com.tenmilelabs.touchlock.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
-import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
@@ -15,8 +13,8 @@ import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
+import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
+import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,8 +30,6 @@ class HomeViewModel @Inject constructor(
     observeOrientationMode: ObserveOrientationModeUseCase,
     observeUsageTimer: ObserveUsageTimerUseCase,
     observeDebugOverlayVisible: ObserveDebugOverlayVisibleUseCase,
-    private val startLock: StartLockUseCase,
-    private val stopLock: StopLockUseCase,
     private val startDelayedLock: StartDelayedLockUseCase,
     private val setOrientationMode: SetOrientationModeUseCase,
     private val setDebugOverlayVisible: SetDebugOverlayVisibleUseCase,
@@ -84,14 +80,6 @@ class HomeViewModel @Inject constructor(
         _hasOverlayPermission.value = overlayPermissionManager.hasPermission()
         _areNotificationsAvailable.value = notificationPermissionManager.areNotificationsAvailable()
         restoreNotification()
-    }
-
-    fun onEnableClicked() {
-        startLock()
-    }
-
-    fun onDisableClicked() {
-        stopLock()
     }
 
     fun onScreenRotationSettingChanged(mode: OrientationMode) {

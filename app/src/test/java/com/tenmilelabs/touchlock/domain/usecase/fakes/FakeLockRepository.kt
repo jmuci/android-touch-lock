@@ -7,45 +7,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Fake implementation of LockRepository for testing.
- * 
+ *
  * Features:
  * - Tracks call counts for all methods
  * - Allows manual state control via emitLockState()
- * - Optionally auto-updates state when startLock/stopLock/startDelayedLock are called
+ * - Optionally auto-updates state when startDelayedLock is called
  */
 class FakeLockRepository(
     private val autoUpdateState: Boolean = true
 ) : LockRepository {
-    
+
     private val lockStateFlow = MutableStateFlow<LockState>(LockState.Unlocked)
-    
-    var startLockCallCount = 0
-        private set
-    
-    var stopLockCallCount = 0
-        private set
-    
+
     var startDelayedLockCallCount = 0
         private set
-    
+
     var restoreNotificationCallCount = 0
         private set
 
     override fun observeLockState(): Flow<LockState> = lockStateFlow
-
-    override fun startLock() {
-        startLockCallCount++
-        if (autoUpdateState) {
-            lockStateFlow.value = LockState.Locked
-        }
-    }
-
-    override fun stopLock() {
-        stopLockCallCount++
-        if (autoUpdateState) {
-            lockStateFlow.value = LockState.Unlocked
-        }
-    }
 
     override fun startDelayedLock() {
         startDelayedLockCallCount++
@@ -65,14 +45,12 @@ class FakeLockRepository(
     fun emitLockState(state: LockState) {
         lockStateFlow.value = state
     }
-    
+
     /**
      * Reset all call counters to zero.
      * Useful when reusing the same fake across multiple test cases.
      */
     fun resetCallCounts() {
-        startLockCallCount = 0
-        stopLockCallCount = 0
         startDelayedLockCallCount = 0
         restoreNotificationCallCount = 0
     }
