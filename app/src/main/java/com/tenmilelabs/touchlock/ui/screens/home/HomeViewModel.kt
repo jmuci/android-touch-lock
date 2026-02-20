@@ -86,10 +86,6 @@ class HomeViewModel @Inject constructor(
         restoreNotification()
     }
 
-    fun onDisableClicked() {
-        stopLock()
-    }
-
     fun onScreenRotationSettingChanged(mode: OrientationMode) {
         viewModelScope.launch {
             setOrientationMode(mode)

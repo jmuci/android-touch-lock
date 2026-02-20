@@ -79,7 +79,6 @@ fun HomeScreen(
         currentOrientationMode = uiState.orientationMode,
         usageTimer = uiState.usageTimer,
         debugOverlayVisible = uiState.debugOverlayVisible,
-        onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
@@ -97,7 +96,6 @@ internal fun HomeScreenContent(
     currentOrientationMode: OrientationMode,
     usageTimer: UsageTimerState,
     debugOverlayVisible: Boolean,
-    onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -154,7 +152,6 @@ internal fun HomeScreenContent(
                 modifier = Modifier
                     .padding(vertical = 16.dp)
                     .testTag("locked_state_indicator"),
-                onDisableClicked = onDisableClicked
             )
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
@@ -233,7 +230,6 @@ internal fun HomeScreenContent(
 @Composable
 fun ActiveLockInstructionsCard(
     modifier: Modifier,
-    onDisableClicked: () -> Unit
 ) {
     Surface(
         shadowElevation = 4.dp,
@@ -515,7 +511,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
                 debugOverlayVisible = false,
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -537,7 +532,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.PORTRAIT,
                 usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
                 debugOverlayVisible = false,
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -553,7 +547,6 @@ fun DebugOverlayCard(
         MaterialTheme {
             ActiveLockInstructionsCard(
                 modifier = Modifier.padding(16.dp),
-                onDisableClicked = {}
             )
         }
     }
@@ -570,7 +563,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.LANDSCAPE,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},
@@ -592,7 +584,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
                 onRequestNotificationPermission = {},

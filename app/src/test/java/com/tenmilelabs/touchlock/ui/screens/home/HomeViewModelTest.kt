@@ -227,15 +227,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `onDisableClicked calls stopLock on repository`() {
-        assertThat(lockRepository.stopLockCallCount).isEqualTo(0)
-
-        viewModel.onDisableClicked()
-
-        assertThat(lockRepository.stopLockCallCount).isEqualTo(1)
-    }
-
-    @Test
     fun `onDelayedLockClicked calls startDelayedLock on repository`() {
         assertThat(lockRepository.startDelayedLockCallCount).isEqualTo(0)
 

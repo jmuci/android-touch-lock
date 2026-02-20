@@ -158,7 +158,7 @@ class ViewModelFlowCompositionTest {
             }
 
             // Disable lock
-            viewModel.onDisableClicked()
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
 
             val unlockedState = awaitItem()
@@ -195,7 +195,7 @@ class ViewModelFlowCompositionTest {
             advanceTimeBy(5000)
             repeat(5) { awaitItem() } // Consume ticks
 
-            viewModel.onDisableClicked()
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             awaitItem() // Lock state changed to Unlocked
             val beforeRecreation = awaitItem() // Timer stopped
@@ -280,7 +280,7 @@ class ViewModelFlowCompositionTest {
             val tick1 = awaitItem()
             assertThat(tick1.usageTimer.elapsedMillisToday).isEqualTo(1000L)
 
-            viewModel.onDisableClicked()
+            fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
             val unlocked1 = awaitItem()
             assertThat(unlocked1.lockState).isEqualTo(LockState.Unlocked)

@@ -40,8 +40,6 @@ class HomeScreenTest {
                     notificationIssueDescription = "",
                     currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                     usageTimer = UsageTimerState.INITIAL,
-                    onEnableClicked = {},
-                    onDisableClicked = {},
                     onDelayedLockClicked = { lockStateFlow.value = LockState.Locked },
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
