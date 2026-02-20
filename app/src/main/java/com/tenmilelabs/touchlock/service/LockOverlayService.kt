@@ -3,8 +3,6 @@ package com.tenmilelabs.touchlock.service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -32,12 +30,10 @@ class LockOverlayService : LifecycleService() {
     @Inject lateinit var permissionManager: OverlayPermissionManager
     @Inject lateinit var configRepository: ConfigRepository
 
-    private val handler = Handler(Looper.getMainLooper())
     private var isServiceRunning = false
-    private var countdownSecondsRemaining = 0
-    private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
     private var pendingLockJob: Job? = null
+    private var countdownJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -238,7 +234,7 @@ class LockOverlayService : LifecycleService() {
 
     /**
      * Starts a delayed lock with countdown.
-     * Shows countdown overlay and schedules lock after delay.
+     * Shows countdown overlay and counts down to lock engagement.
      */
     private fun startDelayedLock() {
         Timber.d("startDelayedLock() called")
@@ -258,61 +254,42 @@ class LockOverlayService : LifecycleService() {
             initService()
         }
 
-        // Start countdown
-        isCountdownActive = true
-        countdownSecondsRemaining = COUNTDOWN_DURATION_SECONDS
+        countdownJob = lifecycleScope.launch {
+            var secondsRemaining = COUNTDOWN_DURATION_SECONDS
 
-        // Show countdown overlay
-        overlayController.showCountdownOverlay(countdownSecondsRemaining)
+            overlayController.showCountdownOverlay(secondsRemaining)
+            assertForegroundState(notificationManager.buildCountdownNotification(secondsRemaining))
 
-        // Update notification
-        assertForegroundState(notificationManager.buildCountdownNotification(countdownSecondsRemaining))
+            repeat(COUNTDOWN_DURATION_SECONDS) {
+                delay(1000)
+                secondsRemaining--
+                Timber.d("Countdown tick: $secondsRemaining seconds remaining")
 
-        // Start countdown timer
-        handler.post(countdownRunnable)
+                if (secondsRemaining > 0) {
+                    overlayController.updateCountdown(secondsRemaining)
+                    assertForegroundState(notificationManager.buildCountdownNotification(secondsRemaining))
+                } else {
+                    // Countdown complete - engage lock
+                    Timber.d("Countdown complete (0 seconds), engaging lock")
+                    overlayController.hideCountdownOverlay()
+                    startLock()
+                }
+            }
+        }
     }
 
     /**
      * Cancels active countdown.
      */
     private fun cancelCountdown() {
-        if (!isCountdownActive) return
+        if (countdownJob == null) return
 
-        isCountdownActive = false
-        handler.removeCallbacks(countdownRunnable)
+        countdownJob?.cancel()
+        countdownJob = null
         overlayController.hideCountdownOverlay()
 
         // Restore unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
-    }
-
-    /**
-     * Countdown tick runnable.
-     */
-    private val countdownRunnable = object : Runnable {
-        override fun run() {
-            if (!isCountdownActive) return
-
-            countdownSecondsRemaining--
-            Timber.d("Countdown tick: $countdownSecondsRemaining seconds remaining")
-
-            if (countdownSecondsRemaining > 0) {
-                // Update countdown display
-                overlayController.updateCountdown(countdownSecondsRemaining)
-
-                // Update notification every second
-                assertForegroundState(notificationManager.buildCountdownNotification(countdownSecondsRemaining))
-
-                // Schedule next tick
-                handler.postDelayed(this, 1000)
-            } else {
-                // Countdown complete - engage lock
-                Timber.d("Countdown complete (0 seconds), engaging lock")
-                isCountdownActive = false
-                overlayController.hideCountdownOverlay()
-                startLock()
-            }
-        }
     }
 
     /**
@@ -348,7 +325,8 @@ class LockOverlayService : LifecycleService() {
     override fun onDestroy() {
         Timber.d("onDestroy() called")
         Timber.d("Cleaning up: removing callbacks, hiding overlay, and finishing orientation activity")
-        handler.removeCallbacks(countdownRunnable)
+        countdownJob?.cancel()
+        countdownJob = null
         pendingLockJob?.cancel()
         pendingLockJob = null
         overlayController.hide()
