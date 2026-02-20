@@ -1,8 +1,8 @@
 package com.tenmilelabs.touchlock.platform.repository
 
-import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton

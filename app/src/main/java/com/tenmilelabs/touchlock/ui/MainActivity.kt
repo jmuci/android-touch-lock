@@ -8,8 +8,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.service.LockOverlayService
-import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
 import com.tenmilelabs.touchlock.ui.screens.home.HomeScreen
+import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject

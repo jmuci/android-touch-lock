@@ -5,12 +5,12 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import com.tenmilelabs.touchlock.platform.overlay.OverlayController
-import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
+import com.tenmilelabs.touchlock.platform.overlay.OverlayController
+import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
@@ -359,6 +359,8 @@ class LockOverlayService : LifecycleService() {
 
         private const val COUNTDOWN_DURATION_SECONDS = 10
 
+        // This makes the lock state process‑global for the service, rather than tied to a specific instance, making it survive
+        // service recreation even if the service is re-started, as long as the app process is alive.
         private val _lockState = MutableStateFlow<LockState>(LockState.Unlocked)
         val lockState: StateFlow<LockState> = _lockState
     }
