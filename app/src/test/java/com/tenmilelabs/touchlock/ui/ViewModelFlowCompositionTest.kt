@@ -13,8 +13,6 @@ import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
@@ -95,8 +93,6 @@ class ViewModelFlowCompositionTest {
             observeLockState = ObserveLockStateUseCase(fakeLockRepository),
             observeOrientationMode = ObserveOrientationModeUseCase(fakeConfigRepository),
             observeUsageTimer = observeUsageTimer,
-            startLock = StartLockUseCase(fakeLockRepository),
-            stopLock = StopLockUseCase(fakeLockRepository),
             startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
             setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
@@ -226,8 +222,6 @@ class ViewModelFlowCompositionTest {
             observeLockState = ObserveLockStateUseCase(fakeLockRepository),
             observeOrientationMode = ObserveOrientationModeUseCase(fakeConfigRepository),
             observeUsageTimer = newObserveUsageTimer,
-            startLock = StartLockUseCase(fakeLockRepository),
-            stopLock = StopLockUseCase(fakeLockRepository),
             startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
             setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),

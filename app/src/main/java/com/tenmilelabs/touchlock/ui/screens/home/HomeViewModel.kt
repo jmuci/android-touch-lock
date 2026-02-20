@@ -13,8 +13,6 @@ import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,8 +30,6 @@ class HomeViewModel @Inject constructor(
     observeOrientationMode: ObserveOrientationModeUseCase,
     observeUsageTimer: ObserveUsageTimerUseCase,
     observeDebugOverlayVisible: ObserveDebugOverlayVisibleUseCase,
-    private val startLock: StartLockUseCase,
-    private val stopLock: StopLockUseCase,
     private val startDelayedLock: StartDelayedLockUseCase,
     private val setOrientationMode: SetOrientationModeUseCase,
     private val setDebugOverlayVisible: SetDebugOverlayVisibleUseCase,

@@ -13,8 +13,6 @@ import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartLockUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StopLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
@@ -78,8 +76,6 @@ class HomeViewModelTest {
             observeLockState = ObserveLockStateUseCase(lockRepository),
             observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
             observeUsageTimer = observeUsageTimerUseCase,
-            startLock = StartLockUseCase(lockRepository),
-            stopLock = StopLockUseCase(lockRepository),
             startDelayedLock = StartDelayedLockUseCase(lockRepository),
             setOrientationMode = SetOrientationModeUseCase(configRepository),
             restoreNotification = RestoreNotificationUseCase(lockRepository),
@@ -283,8 +279,6 @@ class HomeViewModelTest {
         observeLockState = ObserveLockStateUseCase(lockRepository),
         observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
         observeUsageTimer = observeUsageTimerUseCase,
-        startLock = StartLockUseCase(lockRepository),
-        stopLock = StopLockUseCase(lockRepository),
         startDelayedLock = StartDelayedLockUseCase(lockRepository),
         setOrientationMode = SetOrientationModeUseCase(configRepository),
         restoreNotification = RestoreNotificationUseCase(lockRepository),
