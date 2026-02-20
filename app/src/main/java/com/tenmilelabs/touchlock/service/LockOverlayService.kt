@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -25,10 +26,14 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class LockOverlayService : LifecycleService() {
 
-    @Inject lateinit var overlayController: OverlayController
-    @Inject lateinit var notificationManager: LockNotificationManager
-    @Inject lateinit var permissionManager: OverlayPermissionManager
-    @Inject lateinit var configRepository: ConfigRepository
+    @Inject
+    lateinit var overlayController: OverlayController
+    @Inject
+    lateinit var notificationManager: LockNotificationManager
+    @Inject
+    lateinit var permissionManager: OverlayPermissionManager
+    @Inject
+    lateinit var configRepository: ConfigRepository
 
     private var isServiceRunning = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
@@ -62,7 +67,7 @@ class LockOverlayService : LifecycleService() {
         if (isServiceRunning) return
 
         Timber.d("Starting foreground service with unlocked notification")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
                 notificationManager.buildUnlockedNotification(),
@@ -80,13 +85,15 @@ class LockOverlayService : LifecycleService() {
 
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
-            configRepository.observeDebugOverlayVisible().collect { visible ->
-                debugOverlayVisible = visible
-                // If overlay is currently shown and debug flag changed, recreate it
-                if (_lockState.value == LockState.Locked) {
-                    recreateOverlay()
+            configRepository.observeDebugOverlayVisible()
+                .distinctUntilChanged()
+                .collect { visible ->
+                    debugOverlayVisible = visible
+                    // If overlay is currently shown and debug flag changed, recreate it
+                    if (_lockState.value == LockState.Locked) {
+                        recreateOverlay()
+                    }
                 }
-            }
         }
     }
 
@@ -115,7 +122,7 @@ class LockOverlayService : LifecycleService() {
 
             // Start transparent orientation lock activity if orientation is locked
             if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
-                val intent = com.tenmilelabs.touchlock.ui.OrientationLockActivity.createStartIntent(
+                val intent = OrientationLockActivity.createStartIntent(
                     this@LockOverlayService,
                     orientationMode
                 )
@@ -123,7 +130,7 @@ class LockOverlayService : LifecycleService() {
 
                 // Small delay to let activity start before showing overlay.
                 // State and notification are only updated after confirming the overlay attached
-                // successfully. The Job is stored so stopLock() can cancel it if needed.
+                // successfully. The Job is stored so stopLock() can cancel before the delay finishes it if needed.
                 pendingLockJob = launch {
                     delay(100)
                     val attached = overlayController.show(orientationMode, debugOverlayVisible) {
@@ -173,7 +180,7 @@ class LockOverlayService : LifecycleService() {
 
         _lockState.value = LockState.Unlocked
     }
-    
+
     private fun finishOrientationLockActivity() {
         Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast and direct finish")
         // Try direct finish first (immediate, no broadcast queue delay)
@@ -192,7 +199,7 @@ class LockOverlayService : LifecycleService() {
         lifecycleScope.launch {
             val orientationMode = configRepository.observeOrientationMode().firstOrNull()
                 ?: OrientationMode.FOLLOW_SYSTEM
-            
+
             overlayController.hide()
             overlayController.show(orientationMode, debugOverlayVisible) {
                 stopLock()
@@ -267,7 +274,11 @@ class LockOverlayService : LifecycleService() {
 
                 if (secondsRemaining > 0) {
                     overlayController.updateCountdown(secondsRemaining)
-                    assertForegroundState(notificationManager.buildCountdownNotification(secondsRemaining))
+                    assertForegroundState(
+                        notificationManager.buildCountdownNotification(
+                            secondsRemaining
+                        )
+                    )
                 } else {
                     // Countdown complete - engage lock
                     Timber.d("Countdown complete (0 seconds), engaging lock")
@@ -297,7 +308,7 @@ class LockOverlayService : LifecycleService() {
      * Always use this instead of NotificationManager.notify() for foreground service notifications.
      */
     private fun assertForegroundState(notification: android.app.Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
