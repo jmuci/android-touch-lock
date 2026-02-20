@@ -5,8 +5,6 @@ import kotlinx.coroutines.flow.Flow
 
 interface LockRepository {
     fun observeLockState(): Flow<LockState>
-    fun startLock()
-    fun stopLock()
     fun startDelayedLock()
     fun restoreNotification()
 }

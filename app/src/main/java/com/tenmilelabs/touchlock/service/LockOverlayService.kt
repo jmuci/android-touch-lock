@@ -45,8 +45,6 @@ class LockOverlayService : LifecycleService() {
         Timber.d("onStartCommand called with action: ${intent?.action}, startId: $startId")
         when (intent?.action) {
             ACTION_INIT -> initService()
-            ACTION_START -> startLock()
-            ACTION_STOP -> stopLock()
             ACTION_TOGGLE -> toggleLock()
             ACTION_DELAYED_LOCK -> startDelayedLock()
             ACTION_CANCEL_COUNTDOWN -> cancelCountdown()
@@ -359,8 +357,6 @@ class LockOverlayService : LifecycleService() {
 
     companion object {
         const val ACTION_INIT = "com.tenmilelabs.touchlock.INIT"
-        const val ACTION_START = "com.tenmilelabs.touchlock.START"
-        const val ACTION_STOP = "com.tenmilelabs.touchlock.STOP"
         const val ACTION_TOGGLE = "com.tenmilelabs.touchlock.TOGGLE"
         const val ACTION_DELAYED_LOCK = "com.tenmilelabs.touchlock.DELAYED_LOCK"
         const val ACTION_CANCEL_COUNTDOWN = "com.tenmilelabs.touchlock.CANCEL_COUNTDOWN"

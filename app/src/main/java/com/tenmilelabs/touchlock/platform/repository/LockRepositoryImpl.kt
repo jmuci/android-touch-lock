@@ -16,20 +16,6 @@ class LockRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : LockRepository {
 
-    override fun startLock() {
-        val intent = Intent(context, LockOverlayService::class.java).apply {
-            action = LockOverlayService.ACTION_START
-        }
-        ContextCompat.startForegroundService(context, intent)
-    }
-
-    override fun stopLock() {
-        val intent = Intent(context, LockOverlayService::class.java).apply {
-            action = LockOverlayService.ACTION_STOP
-        }
-        ContextCompat.startForegroundService(context, intent)
-    }
-
     override fun startDelayedLock() {
         val intent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_DELAYED_LOCK
