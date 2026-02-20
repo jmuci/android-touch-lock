@@ -136,7 +136,8 @@ class ViewModelFlowCompositionTest {
             assertThat(initial.usageTimer.elapsedMillisToday).isEqualTo(0L)
 
             // Enable lock
-            viewModel.onEnableClicked()
+            //viewModel.onEnableClicked()
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100) // Allow state propagation
 
             val lockedState = awaitItem()
@@ -186,7 +187,7 @@ class ViewModelFlowCompositionTest {
             awaitItem() // Initial
 
             // Accumulate some time
-            viewModel.onEnableClicked()
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             awaitItem() // Lock started
 
@@ -258,7 +259,7 @@ class ViewModelFlowCompositionTest {
 
     /**
      * Test: Multiple state changes flow through correctly without race conditions.
-     * 
+     *
      * Rapidly toggling lock state should produce consistent UI state updates
      * with no dropped or out-of-order emissions.
      */
@@ -268,7 +269,7 @@ class ViewModelFlowCompositionTest {
             awaitItem() // Initial
 
             // Rapid enable/disable cycles
-            viewModel.onEnableClicked()
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             val locked1 = awaitItem()
             assertThat(locked1.lockState).isEqualTo(LockState.Locked)
@@ -287,7 +288,7 @@ class ViewModelFlowCompositionTest {
             assertThat(timerStopped.usageTimer.isRunning).isFalse()
             assertThat(timerStopped.usageTimer.elapsedMillisToday).isEqualTo(1000L)
 
-            viewModel.onEnableClicked()
+            fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
             val locked2 = awaitItem()
             assertThat(locked2.lockState).isEqualTo(LockState.Locked)

@@ -86,10 +86,6 @@ class HomeViewModel @Inject constructor(
         restoreNotification()
     }
 
-    fun onEnableClicked() {
-        startLock()
-    }
-
     fun onDisableClicked() {
         stopLock()
     }

@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tenmilelabs.touchlock.BuildConfig
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
@@ -79,7 +79,6 @@ fun HomeScreen(
         currentOrientationMode = uiState.orientationMode,
         usageTimer = uiState.usageTimer,
         debugOverlayVisible = uiState.debugOverlayVisible,
-        onEnableClicked = viewModel::onEnableClicked,
         onDisableClicked = viewModel::onDisableClicked,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
@@ -98,7 +97,6 @@ internal fun HomeScreenContent(
     currentOrientationMode: OrientationMode,
     usageTimer: UsageTimerState,
     debugOverlayVisible: Boolean,
-    onEnableClicked: () -> Unit,
     onDisableClicked: () -> Unit,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
@@ -517,7 +515,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
@@ -540,7 +537,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.PORTRAIT,
                 usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
@@ -574,7 +570,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.LANDSCAPE,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
@@ -597,7 +592,6 @@ fun DebugOverlayCard(
                 currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                 usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
                 debugOverlayVisible = false,
-                onEnableClicked = {},
                 onDisableClicked = {},
                 onDelayedLockClicked = {},
                 onRequestOverlayPermission = {},
