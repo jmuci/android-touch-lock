@@ -15,6 +15,8 @@ import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
@@ -35,7 +37,7 @@ class LockOverlayService : LifecycleService() {
     private var countdownSecondsRemaining = 0
     private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
-    private var showOverlayRunnable: Runnable? = null
+    private var pendingLockJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -124,21 +126,21 @@ class LockOverlayService : LifecycleService() {
                 startActivity(intent)
 
                 // Small delay to let activity start before showing overlay.
-                // State and notification are only updated inside the runnable, after confirming
-                // the overlay attached successfully.
-                showOverlayRunnable = Runnable {
+                // State and notification are only updated after confirming the overlay attached
+                // successfully. The Job is stored so stopLock() can cancel it if needed.
+                pendingLockJob = launch {
+                    delay(100)
                     val attached = overlayController.show(orientationMode, debugOverlayVisible) {
                         stopLock()
                     }
                     if (!attached) {
                         Timber.e("startLock: overlay addView failed (delayed path); aborting lock")
                         finishOrientationLockActivity()
-                        return@Runnable
+                        return@launch
                     }
                     assertForegroundState(notificationManager.buildLockedNotification())
                     _lockState.value = LockState.Locked
                 }
-                handler.postDelayed(showOverlayRunnable!!, 100)
             } else {
                 // No orientation locking needed, show overlay directly
                 val attached = overlayController.show(orientationMode, debugOverlayVisible) {
@@ -162,8 +164,8 @@ class LockOverlayService : LifecycleService() {
 
         // Cancel any pending countdown and delayed overlay show to prevent callbacks from firing
         cancelCountdown()
-        showOverlayRunnable?.let { handler.removeCallbacks(it) }
-        showOverlayRunnable = null
+        pendingLockJob?.cancel()
+        pendingLockJob = null
 
         overlayController.hide()
 
@@ -347,8 +349,8 @@ class LockOverlayService : LifecycleService() {
         Timber.d("onDestroy() called")
         Timber.d("Cleaning up: removing callbacks, hiding overlay, and finishing orientation activity")
         handler.removeCallbacks(countdownRunnable)
-        showOverlayRunnable?.let { handler.removeCallbacks(it) }
-        showOverlayRunnable = null
+        pendingLockJob?.cancel()
+        pendingLockJob = null
         overlayController.hide()
         finishOrientationLockActivity()
         Timber.d("Service destroyed")
