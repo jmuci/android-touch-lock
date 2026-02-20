@@ -33,15 +33,15 @@ class LockNotificationManager @Inject constructor(
 
         val togglePendingIntent = PendingIntent.getService(
             context,
-            0,
+            REQUEST_CODE_UNLOCKED,
             toggleIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_open_24)
-            .setContentTitle("Touch Lock ready")
-            .setContentText("Tap to lock")
+            .setContentTitle(context.getString(R.string.notification_unlocked_title))
+            .setContentText(context.getString(R.string.notification_unlocked_text))
             .setColor(ContextCompat.getColor(context, R.color.purple_200))
             .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
@@ -58,15 +58,15 @@ class LockNotificationManager @Inject constructor(
 
         val togglePendingIntent = PendingIntent.getService(
             context,
-            0,
+            REQUEST_CODE_LOCKED,
             toggleIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_24)
-            .setContentTitle("Touch Lock active")
-            .setContentText("Tap to unlock")
+            .setContentTitle(context.getString(R.string.notification_locked_title))
+            .setContentText(context.getString(R.string.notification_locked_text))
             .setContentIntent(togglePendingIntent)
             .setColor(ContextCompat.getColor(context, R.color.purple_200))
             .setColorized(true) // foreground services only
@@ -83,15 +83,15 @@ class LockNotificationManager @Inject constructor(
 
         val cancelPendingIntent = PendingIntent.getService(
             context,
-            0,
+            REQUEST_CODE_COUNTDOWN,
             cancelIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_24)
-            .setContentTitle("Touch Lock countdown")
-            .setContentText("Locking in $secondsRemaining seconds...")
+            .setContentTitle(context.getString(R.string.notification_countdown_title))
+            .setContentText(context.getString(R.string.notification_countdown_text, secondsRemaining))
             .setContentIntent(cancelPendingIntent)
             .setColor(ContextCompat.getColor(context, R.color.purple_200))
             .setColorized(true) // foreground services only
@@ -112,5 +112,8 @@ class LockNotificationManager @Inject constructor(
 
     companion object {
         const val CHANNEL_ID = "touch_lock_channel"
+        private const val REQUEST_CODE_UNLOCKED = 0
+        private const val REQUEST_CODE_LOCKED = 1
+        private const val REQUEST_CODE_COUNTDOWN = 2
     }
 }

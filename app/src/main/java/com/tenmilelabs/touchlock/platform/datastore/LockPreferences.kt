@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
+import com.tenmilelabs.touchlock.domain.model.UsageData
 import com.tenmilelabs.touchlock.domain.repository.LockPreferencesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -121,13 +122,4 @@ class LockPreferences @Inject constructor(
             preferences.remove(Keys.USAGE_LAST_START_TIME)
         }
     }
-
-    /**
-     * Data class representing stored usage data.
-     */
-    data class UsageData(
-        val date: String, // Format: yyyy-MM-dd
-        val accumulatedMillis: Long,
-        val lastStartTime: Long? // System.currentTimeMillis() when lock was started, null if stopped
-    )
 }

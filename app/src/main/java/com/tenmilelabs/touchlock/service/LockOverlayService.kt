@@ -3,8 +3,6 @@ package com.tenmilelabs.touchlock.service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -15,6 +13,8 @@ import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
@@ -30,11 +30,10 @@ class LockOverlayService : LifecycleService() {
     @Inject lateinit var permissionManager: OverlayPermissionManager
     @Inject lateinit var configRepository: ConfigRepository
 
-    private val handler = Handler(Looper.getMainLooper())
     private var isServiceRunning = false
-    private var countdownSecondsRemaining = 0
-    private var isCountdownActive = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
+    private var pendingLockJob: Job? = null
+    private var countdownJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -121,24 +120,36 @@ class LockOverlayService : LifecycleService() {
                     orientationMode
                 )
                 startActivity(intent)
-                
-                // Small delay to let activity start before showing overlay
-                handler.postDelayed({
-                    overlayController.show(orientationMode, debugOverlayVisible) {
+
+                // Small delay to let activity start before showing overlay.
+                // State and notification are only updated after confirming the overlay attached
+                // successfully. The Job is stored so stopLock() can cancel it if needed.
+                pendingLockJob = launch {
+                    delay(100)
+                    val attached = overlayController.show(orientationMode, debugOverlayVisible) {
                         stopLock()
                     }
-                }, 100)
+                    if (!attached) {
+                        Timber.e("startLock: overlay addView failed (delayed path); aborting lock")
+                        finishOrientationLockActivity()
+                        return@launch
+                    }
+                    assertForegroundState(notificationManager.buildLockedNotification())
+                    _lockState.value = LockState.Locked
+                }
             } else {
                 // No orientation locking needed, show overlay directly
-                overlayController.show(orientationMode, debugOverlayVisible) {
+                val attached = overlayController.show(orientationMode, debugOverlayVisible) {
                     stopLock()
                 }
+                if (!attached) {
+                    Timber.e("startLock: overlay addView failed; aborting lock")
+                    return@launch
+                }
+                // Reassert foreground state with locked notification
+                assertForegroundState(notificationManager.buildLockedNotification())
+                _lockState.value = LockState.Locked
             }
-
-            // Reassert foreground state with locked notification
-            assertForegroundState(notificationManager.buildLockedNotification())
-
-            _lockState.value = LockState.Locked
         }
     }
 
@@ -147,8 +158,10 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
-        // Cancel any pending countdown to prevent callbacks from firing
+        // Cancel any pending countdown and delayed overlay show to prevent callbacks from firing
         cancelCountdown()
+        pendingLockJob?.cancel()
+        pendingLockJob = null
 
         overlayController.hide()
 
@@ -221,7 +234,7 @@ class LockOverlayService : LifecycleService() {
 
     /**
      * Starts a delayed lock with countdown.
-     * Shows countdown overlay and schedules lock after delay.
+     * Shows countdown overlay and counts down to lock engagement.
      */
     private fun startDelayedLock() {
         Timber.d("startDelayedLock() called")
@@ -241,61 +254,42 @@ class LockOverlayService : LifecycleService() {
             initService()
         }
 
-        // Start countdown
-        isCountdownActive = true
-        countdownSecondsRemaining = COUNTDOWN_DURATION_SECONDS
+        countdownJob = lifecycleScope.launch {
+            var secondsRemaining = COUNTDOWN_DURATION_SECONDS
 
-        // Show countdown overlay
-        overlayController.showCountdownOverlay(countdownSecondsRemaining)
+            overlayController.showCountdownOverlay(secondsRemaining)
+            assertForegroundState(notificationManager.buildCountdownNotification(secondsRemaining))
 
-        // Update notification
-        assertForegroundState(notificationManager.buildCountdownNotification(countdownSecondsRemaining))
+            repeat(COUNTDOWN_DURATION_SECONDS) {
+                delay(1000)
+                secondsRemaining--
+                Timber.d("Countdown tick: $secondsRemaining seconds remaining")
 
-        // Start countdown timer
-        handler.post(countdownRunnable)
+                if (secondsRemaining > 0) {
+                    overlayController.updateCountdown(secondsRemaining)
+                    assertForegroundState(notificationManager.buildCountdownNotification(secondsRemaining))
+                } else {
+                    // Countdown complete - engage lock
+                    Timber.d("Countdown complete (0 seconds), engaging lock")
+                    overlayController.hideCountdownOverlay()
+                    startLock()
+                }
+            }
+        }
     }
 
     /**
      * Cancels active countdown.
      */
     private fun cancelCountdown() {
-        if (!isCountdownActive) return
+        if (countdownJob == null) return
 
-        isCountdownActive = false
-        handler.removeCallbacks(countdownRunnable)
+        countdownJob?.cancel()
+        countdownJob = null
         overlayController.hideCountdownOverlay()
 
         // Restore unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
-    }
-
-    /**
-     * Countdown tick runnable.
-     */
-    private val countdownRunnable = object : Runnable {
-        override fun run() {
-            if (!isCountdownActive) return
-
-            countdownSecondsRemaining--
-            Timber.d("Countdown tick: $countdownSecondsRemaining seconds remaining")
-
-            if (countdownSecondsRemaining > 0) {
-                // Update countdown display
-                overlayController.updateCountdown(countdownSecondsRemaining)
-
-                // Update notification every second
-                assertForegroundState(notificationManager.buildCountdownNotification(countdownSecondsRemaining))
-
-                // Schedule next tick
-                handler.postDelayed(this, 1000)
-            } else {
-                // Countdown complete - engage lock
-                Timber.d("Countdown complete (0 seconds), engaging lock")
-                isCountdownActive = false
-                overlayController.hideCountdownOverlay()
-                startLock()
-            }
-        }
     }
 
     /**
@@ -330,9 +324,13 @@ class LockOverlayService : LifecycleService() {
     // Defensive stop. Prevents rare window leaks.
     override fun onDestroy() {
         Timber.d("onDestroy() called")
-        Timber.d("Cleaning up: removing callbacks and hiding overlay")
-        handler.removeCallbacks(countdownRunnable)
+        Timber.d("Cleaning up: removing callbacks, hiding overlay, and finishing orientation activity")
+        countdownJob?.cancel()
+        countdownJob = null
+        pendingLockJob?.cancel()
+        pendingLockJob = null
         overlayController.hide()
+        finishOrientationLockActivity()
         Timber.d("Service destroyed")
         super.onDestroy()
     }

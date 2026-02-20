@@ -1,7 +1,7 @@
 package com.tenmilelabs.touchlock.domain.repository
 
 import com.tenmilelabs.touchlock.domain.model.OrientationMode
-import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
+import com.tenmilelabs.touchlock.domain.model.UsageData
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.Flow
  */
 interface LockPreferencesRepository {
     val orientationMode: Flow<OrientationMode>
-    val usageData: Flow<LockPreferences.UsageData?>
-    
+    val usageData: Flow<UsageData?>
+
     suspend fun setOrientationMode(mode: OrientationMode)
-    suspend fun getUsageData(date: String): LockPreferences.UsageData?
-    suspend fun updateUsageData(data: LockPreferences.UsageData)
+    suspend fun getUsageData(date: String): UsageData?
+    suspend fun updateUsageData(data: UsageData)
     suspend fun clearUsageData()
 }

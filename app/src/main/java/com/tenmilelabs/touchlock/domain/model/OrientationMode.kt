@@ -1,7 +1,10 @@
 package com.tenmilelabs.touchlock.domain.model
 
-enum class OrientationMode(val title: String) {
-    PORTRAIT("Portrait"),
-    LANDSCAPE("Landscape"),
-    FOLLOW_SYSTEM("Auto")
+import androidx.annotation.StringRes
+import com.tenmilelabs.touchlock.R
+
+enum class OrientationMode(@param:StringRes val titleRes: Int) {
+    PORTRAIT(R.string.orientation_portrait),
+    LANDSCAPE(R.string.orientation_landscape),
+    FOLLOW_SYSTEM(R.string.orientation_auto)
 }
