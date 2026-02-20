@@ -3,15 +3,12 @@ package com.tenmilelabs.touchlock.ui.screens.home
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
-import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
@@ -74,10 +71,8 @@ class HomeViewModelTest {
 
         viewModel = HomeViewModel(
             observeLockState = ObserveLockStateUseCase(lockRepository),
-            observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
             observeUsageTimer = observeUsageTimerUseCase,
             startDelayedLock = StartDelayedLockUseCase(lockRepository),
-            setOrientationMode = SetOrientationModeUseCase(configRepository),
             restoreNotification = RestoreNotificationUseCase(lockRepository),
             overlayPermissionManager = overlayPermissionManager,
             notificationPermissionManager = notificationPermissionManager,
@@ -97,7 +92,6 @@ class HomeViewModelTest {
         viewModel.uiState.test {
             val state = awaitItem()
             assertThat(state.lockState).isEqualTo(LockState.Unlocked)
-            assertThat(state.orientationMode).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
             assertThat(state.hasOverlayPermission).isFalse()
             assertThat(state.areNotificationsAvailable).isFalse()
         }
@@ -115,21 +109,6 @@ class HomeViewModelTest {
             assertThat(awaitItem().lockState).isEqualTo(LockState.Unlocked)
             cancelAndIgnoreRemainingEvents()
 
-        }
-    }
-
-    @Test
-    fun `uiState orientationMode reflects changes from repository`() = runTest {
-        viewModel.uiState.test {
-            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.FOLLOW_SYSTEM)
-
-            configRepository.emitOrientationMode(OrientationMode.PORTRAIT)
-            advanceUntilIdle()
-            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.PORTRAIT)
-
-            configRepository.emitOrientationMode(OrientationMode.LANDSCAPE)
-            advanceUntilIdle()
-            assertThat(awaitItem().orientationMode).isEqualTo(OrientationMode.LANDSCAPE)
         }
     }
 
@@ -232,24 +211,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `onScreenRotationSettingChanged calls setOrientationMode with correct mode`() = runTest {
-        assertThat(configRepository.setOrientationModeCallCount).isEqualTo(0)
-        assertThat(configRepository.lastOrientationMode).isNull()
-
-        viewModel.onScreenRotationSettingChanged(OrientationMode.PORTRAIT)
-        advanceUntilIdle()
-
-        assertThat(configRepository.setOrientationModeCallCount).isEqualTo(1)
-        assertThat(configRepository.lastOrientationMode).isEqualTo(OrientationMode.PORTRAIT)
-
-        viewModel.onScreenRotationSettingChanged(OrientationMode.LANDSCAPE)
-        advanceUntilIdle()
-
-        assertThat(configRepository.setOrientationModeCallCount).isEqualTo(2)
-        assertThat(configRepository.lastOrientationMode).isEqualTo(OrientationMode.LANDSCAPE)
-    }
-
-    @Test
     fun `multiple permission refreshes update uiState correctly`() = runTest {
         viewModel.uiState.test {
             assertThat(awaitItem().hasOverlayPermission).isFalse()
@@ -277,10 +238,8 @@ class HomeViewModelTest {
     // Helper function to create a fresh ViewModel with current fake dependencies
     private fun createViewModel() = HomeViewModel(
         observeLockState = ObserveLockStateUseCase(lockRepository),
-        observeOrientationMode = ObserveOrientationModeUseCase(configRepository),
         observeUsageTimer = observeUsageTimerUseCase,
         startDelayedLock = StartDelayedLockUseCase(lockRepository),
-        setOrientationMode = SetOrientationModeUseCase(configRepository),
         restoreNotification = RestoreNotificationUseCase(lockRepository),
         overlayPermissionManager = overlayPermissionManager,
         notificationPermissionManager = notificationPermissionManager,
@@ -291,20 +250,7 @@ class HomeViewModelTest {
     // Fake implementations for testing
 
     private class FakeConfigRepository : ConfigRepository {
-        private val orientationModeFlow = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
-
         private val debugOverlayVisibleFlow = MutableStateFlow(false)
-        var setOrientationModeCallCount = 0
-
-        var lastOrientationMode: OrientationMode? = null
-
-        override fun observeOrientationMode(): Flow<OrientationMode> = orientationModeFlow
-
-        override suspend fun setOrientationMode(mode: OrientationMode) {
-            setOrientationModeCallCount++
-            lastOrientationMode = mode
-            orientationModeFlow.value = mode
-        }
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> {
             return debugOverlayVisibleFlow
@@ -312,10 +258,6 @@ class HomeViewModelTest {
 
         override suspend fun setDebugOverlayVisible(visible: Boolean) {
             debugOverlayVisibleFlow.value = visible
-        }
-
-        fun emitOrientationMode(mode: OrientationMode) {
-            orientationModeFlow.value = mode
         }
     }
 

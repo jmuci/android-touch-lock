@@ -1,6 +1,5 @@
 package com.tenmilelabs.touchlock.domain.usecase.fakes
 
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.model.UsageData
 import com.tenmilelabs.touchlock.domain.repository.LockPreferencesRepository
 import kotlinx.coroutines.flow.Flow
@@ -11,16 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * Avoids DataStore complexity and provides deterministic behavior.
  */
 class FakeLockPreferences : LockPreferencesRepository {
-    private val _orientationMode = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
     private val _usageData = MutableStateFlow<UsageData?>(null)
 
-    override val orientationMode: Flow<OrientationMode> = _orientationMode
-
     override val usageData: Flow<UsageData?> = _usageData
-
-    override suspend fun setOrientationMode(mode: OrientationMode) {
-        _orientationMode.value = mode
-    }
 
     override suspend fun getUsageData(date: String): UsageData? {
         val current = _usageData.value

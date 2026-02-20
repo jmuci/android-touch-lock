@@ -2,13 +2,11 @@ package com.tenmilelabs.touchlock.platform.overlay
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.ActivityInfo
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -28,20 +26,16 @@ class OverlayController @Inject constructor(
     private var overlayView: OverlayView? = null
     private var unlockHandleView: UnlockHandleView? = null
     private var countdownOverlayView: CountdownOverlayView? = null
-    private var currentOrientationMode: OrientationMode = OrientationMode.FOLLOW_SYSTEM
 
     private val hideHandleRunnable = Runnable {
         hideUnlockHandle()
     }
 
     fun show(
-        orientationMode: OrientationMode,
         debugTintVisible: Boolean = false,
         onUnlockRequested: () -> Unit
     ): Boolean {
         if (overlayView != null) return true
-
-        currentOrientationMode = orientationMode
 
         overlayView = OverlayView(
             context = context,
@@ -52,7 +46,7 @@ class OverlayController @Inject constructor(
             debugTintVisible = debugTintVisible
         )
         return try {
-            windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
+            windowManager.addView(overlayView, fullScreenLayoutParams())
             true
         } catch (e: Exception) {
             Timber.e(e, "Failed to add overlay view")
@@ -156,29 +150,16 @@ class OverlayController @Inject constructor(
     }
 
     @SuppressLint("RtlHardcoded")
-    private fun fullScreenLayoutParams(orientationMode: OrientationMode): WindowManager.LayoutParams {
+    private fun fullScreenLayoutParams(): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    // FLAG_LAYOUT_NO_LIMITS allows the window to extend beyond screen bounds
-                    // This helps with orientation changes
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            
-            // Set screen orientation based on mode
-            // Note: screenOrientation on WindowManager.LayoutParams is officially supported
-            // but TYPE_APPLICATION_OVERLAY windows have limited ability to force system rotation.
-            // This works best when the user has already rotated to the desired orientation.
-            // For full orientation locking control, a transparent Activity would be needed.
-            screenOrientation = when (orientationMode) {
-                OrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                OrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                OrientationMode.FOLLOW_SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
         }
     }
 
@@ -213,4 +194,3 @@ class OverlayController @Inject constructor(
         private const val HANDLE_VISIBILITY_TIMEOUT_MS = 4000L // 4 seconds
     }
 }
-

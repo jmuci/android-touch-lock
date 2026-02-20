@@ -2,8 +2,6 @@ package com.tenmilelabs.touchlock.ui.screens.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,11 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -29,9 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -46,7 +38,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tenmilelabs.touchlock.BuildConfig
 import com.tenmilelabs.touchlock.R
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 
 @Composable
@@ -76,13 +67,11 @@ fun HomeScreen(
         hasOverlayPermission = uiState.hasOverlayPermission,
         areNotificationsAvailable = uiState.areNotificationsAvailable,
         notificationIssueDescription = viewModel.notificationIssueDescription,
-        currentOrientationMode = uiState.orientationMode,
         usageTimer = uiState.usageTimer,
         debugOverlayVisible = uiState.debugOverlayVisible,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
-        onScreenRotationSettingChanged = viewModel::onScreenRotationSettingChanged,
         onDebugOverlayVisibleChanged = viewModel::onDebugOverlayVisibleChanged
     )
 }
@@ -93,13 +82,11 @@ internal fun HomeScreenContent(
     hasOverlayPermission: Boolean,
     areNotificationsAvailable: Boolean,
     notificationIssueDescription: String,
-    currentOrientationMode: OrientationMode,
     usageTimer: UsageTimerState,
     debugOverlayVisible: Boolean,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
-    onScreenRotationSettingChanged: (OrientationMode) -> Unit,
     onDebugOverlayVisibleChanged: (Boolean) -> Unit
 ) {
     Column(
@@ -156,50 +143,18 @@ internal fun HomeScreenContent(
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
 
-            // Adaptive layout: vertical in portrait, horizontal in landscape
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val isWideLayout = maxWidth >= 600.dp
-                
-                if (isWideLayout) {
-                    // Landscape: Three cards side-by-side
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        SettingsCard(
-                            modifier = Modifier.weight(1f),
-                            currentOrientationMode = currentOrientationMode,
-                            onScreenRotationSettingChanged = onScreenRotationSettingChanged
-                        )
-                        UsageTimerCard(
-                            modifier = Modifier.weight(1f),
-                            usageTimer = usageTimer
-                        )
-                    }
-                } else {
-                    // Portrait: Three cards stacked vertically
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsCard(
-                            modifier = Modifier.padding(vertical = 16.dp),
-                            currentOrientationMode = currentOrientationMode,
-                            onScreenRotationSettingChanged = onScreenRotationSettingChanged
-                        )
-                        UsageTimerCard(
-                            modifier = Modifier.padding(vertical = 16.dp),
-                            usageTimer = usageTimer
-                        )
-                    }
-                }
-            }
+            UsageTimerCard(
+                modifier = Modifier.padding(vertical = 16.dp),
+                usageTimer = usageTimer
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Lock buttons when unlocked
+            // Lock button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
-
                 Button(
                     onClick = onDelayedLockClicked,
                     modifier = Modifier
@@ -352,67 +307,6 @@ fun HowToUseCard(modifier: Modifier) {
 }
 
 @Composable
-fun SettingsCard(
-    modifier: Modifier,
-    currentOrientationMode: OrientationMode,
-    onScreenRotationSettingChanged: (OrientationMode) -> Unit
-) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Surface(
-        shadowElevation = 2.dp,
-        shape = MaterialTheme.shapes.medium,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Image(
-                painter = rememberVectorPainter(Icons.Filled.ScreenRotation),
-                contentDescription = stringResource(R.string.content_description_screen_rotation),
-                modifier = Modifier.size(32.dp)
-            )
-            Column(
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.screen_rotation),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = stringResource(currentOrientationMode.titleRes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Box {
-                Button(onClick = { expanded = true }) {
-                    Text(text = stringResource(R.string.change))
-                }
-
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    OrientationMode.entries.forEach { orientation ->
-                        DropdownMenuItem(
-                            onClick = {
-                                onScreenRotationSettingChanged(orientation)
-                                expanded = false
-                            },
-                            text = { Text(text = stringResource(orientation.titleRes)) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun UsageTimerCard(
     modifier: Modifier,
     usageTimer: UsageTimerState
@@ -499,96 +393,88 @@ fun DebugOverlayCard(
     }
 }
 
-    @Preview(showBackground = true, name = "Unlocked State")
-    @Composable
-    private fun HomeScreenUnlockedPreview() {
-        MaterialTheme {
-            HomeScreenContent(
-                lockState = LockState.Unlocked,
-                hasOverlayPermission = true,
-                areNotificationsAvailable = true,
-                notificationIssueDescription = "",
-                currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
-                usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
-                debugOverlayVisible = false,
-                onDelayedLockClicked = {},
-                onRequestOverlayPermission = {},
-                onRequestNotificationPermission = {},
-                onScreenRotationSettingChanged = {},
-                onDebugOverlayVisibleChanged = {}
-            )
-        }
+@Preview(showBackground = true, name = "Unlocked State")
+@Composable
+private fun HomeScreenUnlockedPreview() {
+    MaterialTheme {
+        HomeScreenContent(
+            lockState = LockState.Unlocked,
+            hasOverlayPermission = true,
+            areNotificationsAvailable = true,
+            notificationIssueDescription = "",
+            usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
+            debugOverlayVisible = false,
+            onDelayedLockClicked = {},
+            onRequestOverlayPermission = {},
+            onRequestNotificationPermission = {},
+            onDebugOverlayVisibleChanged = {}
+        )
     }
+}
 
-    @Preview(showBackground = true, name = "Locked State")
-    @Composable
-    private fun HomeScreenLockedPreview() {
-        MaterialTheme {
-            HomeScreenContent(
-                lockState = LockState.Locked,
-                hasOverlayPermission = true,
-                areNotificationsAvailable = true,
-                notificationIssueDescription = "",
-                currentOrientationMode = OrientationMode.PORTRAIT,
-                usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
-                debugOverlayVisible = false,
-                onDelayedLockClicked = {},
-                onRequestOverlayPermission = {},
-                onRequestNotificationPermission = {},
-                onScreenRotationSettingChanged = {},
-                onDebugOverlayVisibleChanged = {}
-            )
-        }
+@Preview(showBackground = true, name = "Locked State")
+@Composable
+private fun HomeScreenLockedPreview() {
+    MaterialTheme {
+        HomeScreenContent(
+            lockState = LockState.Locked,
+            hasOverlayPermission = true,
+            areNotificationsAvailable = true,
+            notificationIssueDescription = "",
+            usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
+            debugOverlayVisible = false,
+            onDelayedLockClicked = {},
+            onRequestOverlayPermission = {},
+            onRequestNotificationPermission = {},
+            onDebugOverlayVisibleChanged = {}
+        )
     }
+}
 
-    @Preview(showBackground = true, name = "Active Lock Card")
-    @Composable
-    private fun ActiveLockInstructionsCardPreview() {
-        MaterialTheme {
-            ActiveLockInstructionsCard(
-                modifier = Modifier.padding(16.dp),
-            )
-        }
+@Preview(showBackground = true, name = "Active Lock Card")
+@Composable
+private fun ActiveLockInstructionsCardPreview() {
+    MaterialTheme {
+        ActiveLockInstructionsCard(
+            modifier = Modifier.padding(16.dp),
+        )
     }
+}
 
-    @Preview(showBackground = true, name = "No Permission")
-    @Composable
-    private fun HomeScreenNoPermissionPreview() {
-        MaterialTheme {
-            HomeScreenContent(
-                lockState = LockState.Unlocked,
-                hasOverlayPermission = false,
-                areNotificationsAvailable = true,
-                notificationIssueDescription = "",
-                currentOrientationMode = OrientationMode.LANDSCAPE,
-                usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
-                debugOverlayVisible = false,
-                onDelayedLockClicked = {},
-                onRequestOverlayPermission = {},
-                onRequestNotificationPermission = {},
-                onScreenRotationSettingChanged = {},
-                onDebugOverlayVisibleChanged = {}
-            )
-        }
+@Preview(showBackground = true, name = "No Permission")
+@Composable
+private fun HomeScreenNoPermissionPreview() {
+    MaterialTheme {
+        HomeScreenContent(
+            lockState = LockState.Unlocked,
+            hasOverlayPermission = false,
+            areNotificationsAvailable = true,
+            notificationIssueDescription = "",
+            usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
+            debugOverlayVisible = false,
+            onDelayedLockClicked = {},
+            onRequestOverlayPermission = {},
+            onRequestNotificationPermission = {},
+            onDebugOverlayVisibleChanged = {}
+        )
     }
+}
 
-    @Preview(showBackground = true, name = "Notifications Blocked")
-    @Composable
-    private fun HomeScreenNotificationsBlockedPreview() {
-        MaterialTheme {
-            HomeScreenContent(
-                lockState = LockState.Unlocked,
-                hasOverlayPermission = true,
-                areNotificationsAvailable = false,
-                notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
-                currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
-                usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
-                debugOverlayVisible = false,
-                onDelayedLockClicked = {},
-                onRequestOverlayPermission = {},
-                onRequestNotificationPermission = {},
-                onScreenRotationSettingChanged = {},
-                onDebugOverlayVisibleChanged = {}
-            )
-        }
+@Preview(showBackground = true, name = "Notifications Blocked")
+@Composable
+private fun HomeScreenNotificationsBlockedPreview() {
+    MaterialTheme {
+        HomeScreenContent(
+            lockState = LockState.Unlocked,
+            hasOverlayPermission = true,
+            areNotificationsAvailable = false,
+            notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
+            usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
+            debugOverlayVisible = false,
+            onDelayedLockClicked = {},
+            onRequestOverlayPermission = {},
+            onRequestNotificationPermission = {},
+            onDebugOverlayVisibleChanged = {}
+        )
     }
+}

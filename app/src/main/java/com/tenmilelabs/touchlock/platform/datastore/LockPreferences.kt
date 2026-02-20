@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.model.UsageData
 import com.tenmilelabs.touchlock.domain.repository.LockPreferencesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,24 +26,11 @@ class LockPreferences @Inject constructor(
     private val dataStore = context.dataStore
 
     private object Keys {
-        val ORIENTATION_MODE = stringPreferencesKey("orientation_mode")
         val USAGE_DATE = stringPreferencesKey("usage_date") // Format: yyyy-MM-dd
         val USAGE_ACCUMULATED_MILLIS = longPreferencesKey("usage_accumulated_millis")
         val USAGE_LAST_START_TIME = longPreferencesKey("usage_last_start_time")
         // Debug-only: Makes overlay visible for lifecycle debugging
         val DEBUG_OVERLAY_VISIBLE = booleanPreferencesKey("debug_overlay_visible")
-    }
-
-    override val orientationMode: Flow<OrientationMode> = dataStore.data
-        .map { preferences ->
-            val modeName = preferences[Keys.ORIENTATION_MODE] ?: OrientationMode.FOLLOW_SYSTEM.name
-            OrientationMode.valueOf(modeName)
-        }
-
-    override suspend fun setOrientationMode(mode: OrientationMode) {
-        dataStore.edit { preferences ->
-            preferences[Keys.ORIENTATION_MODE] = mode.name
-        }
     }
 
     // Debug-only: Observe overlay visibility setting (for debugging overlay lifecycle issues)

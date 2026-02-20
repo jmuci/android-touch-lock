@@ -21,10 +21,6 @@
     <string name="how_to_use_step3">3. Pull down the notification drawer and tap the Touch Lock notification.</string>
     <string name="how_to_use_step4">4. One tap locks or unlocks instantly - no expansion needed!</string>
     
-    <!-- Settings Card -->
-    <string name="content_description_screen_rotation">Screen Rotation Settings</string>
-    <string name="screen_rotation">Screen Rotation</string>
-    <string name="change">Change</string>
     <string name="notifications_disabled_warning">⚠️ Notifications Disabled</string>
     <string name="notifications_disabled_availability">Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.</string>
     <string name="notifications_availability_channel_blocked">The Touch Lock notification channel is blocked. Enable it to lock/unlock from the notification drawer.</string>
@@ -36,11 +32,6 @@
     <string name="notification_locked_text">Tap to unlock</string>
     <string name="notification_countdown_title">Touch Lock countdown</string>
     <string name="notification_countdown_text">Locking in %d seconds…</string>
-
-    <!-- Orientation Modes -->
-    <string name="orientation_portrait">Portrait</string>
-    <string name="orientation_landscape">Landscape</string>
-    <string name="orientation_auto">Auto</string>
 
     <!-- UI Strings -->
     <string name="enable_notifications">Enable Notifications</string>

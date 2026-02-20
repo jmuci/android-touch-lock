@@ -10,7 +10,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
@@ -27,11 +26,9 @@ import org.junit.Test
  *  - Overlay permission gate (button hidden, prompt visible when permission missing)
  *  - Notification warning card visibility
  *  - Lock button and locked-state indicator mutual exclusivity
- *  - Orientation mode display text
  *  - Usage timer display (format and running vs idle colour are not tested here –
  *    those belong in unit tests; we only verify the card is present)
- *  - Callback wiring (onRequestOverlayPermission, onRequestNotificationPermission,
- *    onScreenRotationSettingChanged)
+ *  - Callback wiring (onRequestOverlayPermission, onRequestNotificationPermission)
  */
 class HomeScreenTest {
 
@@ -51,13 +48,11 @@ class HomeScreenTest {
         hasOverlayPermission: Boolean = true,
         areNotificationsAvailable: Boolean = true,
         notificationIssueDescription: String = "",
-        currentOrientationMode: OrientationMode = OrientationMode.FOLLOW_SYSTEM,
         usageTimer: UsageTimerState = UsageTimerState.INITIAL,
         debugOverlayVisible: Boolean = false,
         onDelayedLockClicked: () -> Unit = {},
         onRequestOverlayPermission: () -> Unit = {},
         onRequestNotificationPermission: () -> Unit = {},
-        onScreenRotationSettingChanged: (OrientationMode) -> Unit = {},
         onDebugOverlayVisibleChanged: (Boolean) -> Unit = {},
     ) {
         composeTestRule.setContent {
@@ -67,13 +62,11 @@ class HomeScreenTest {
                     hasOverlayPermission = hasOverlayPermission,
                     areNotificationsAvailable = areNotificationsAvailable,
                     notificationIssueDescription = notificationIssueDescription,
-                    currentOrientationMode = currentOrientationMode,
                     usageTimer = usageTimer,
                     debugOverlayVisible = debugOverlayVisible,
                     onDelayedLockClicked = onDelayedLockClicked,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestNotificationPermission = onRequestNotificationPermission,
-                    onScreenRotationSettingChanged = onScreenRotationSettingChanged,
                     onDebugOverlayVisibleChanged = onDebugOverlayVisibleChanged,
                 )
             }
@@ -96,12 +89,10 @@ class HomeScreenTest {
                     hasOverlayPermission = true,
                     areNotificationsAvailable = true,
                     notificationIssueDescription = "",
-                    currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                     usageTimer = UsageTimerState.INITIAL,
                     onDelayedLockClicked = { lockStateFlow.value = LockState.Locked },
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
-                    onScreenRotationSettingChanged = {},
                     onDebugOverlayVisibleChanged = {},
                     debugOverlayVisible = false,
                 )
@@ -147,12 +138,10 @@ class HomeScreenTest {
                     hasOverlayPermission = true,
                     areNotificationsAvailable = true,
                     notificationIssueDescription = "",
-                    currentOrientationMode = OrientationMode.FOLLOW_SYSTEM,
                     usageTimer = UsageTimerState.INITIAL,
                     onDelayedLockClicked = {},
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
-                    onScreenRotationSettingChanged = {},
                     onDebugOverlayVisibleChanged = {},
                     debugOverlayVisible = false,
                 )
@@ -274,31 +263,6 @@ class HomeScreenTest {
         setContent(areNotificationsAvailable = true)
 
         composeTestRule.onNodeWithText("⚠️ Notifications Disabled").assertDoesNotExist()
-    }
-
-    // ---------------------------------------------------------------------------
-    // Orientation / settings card
-    // ---------------------------------------------------------------------------
-
-    @Test
-    fun orientationMode_followSystem_displaysAutoLabel() {
-        setContent(currentOrientationMode = OrientationMode.FOLLOW_SYSTEM)
-
-        composeTestRule.onNodeWithText("Auto").assertIsDisplayed()
-    }
-
-    @Test
-    fun orientationMode_portrait_displaysPortraitLabel() {
-        setContent(currentOrientationMode = OrientationMode.PORTRAIT)
-
-        composeTestRule.onNodeWithText("Portrait").assertIsDisplayed()
-    }
-
-    @Test
-    fun orientationMode_landscape_displaysLandscapeLabel() {
-        setContent(currentOrientationMode = OrientationMode.LANDSCAPE)
-
-        composeTestRule.onNodeWithText("Landscape").assertIsDisplayed()
     }
 
     // ---------------------------------------------------------------------------

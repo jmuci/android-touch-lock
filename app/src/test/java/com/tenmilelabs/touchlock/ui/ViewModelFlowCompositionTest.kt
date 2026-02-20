@@ -3,15 +3,12 @@ package com.tenmilelabs.touchlock.ui
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
-import com.tenmilelabs.touchlock.domain.usecase.ObserveOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
 import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.SetOrientationModeUseCase
 import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
@@ -91,10 +88,8 @@ class ViewModelFlowCompositionTest {
 
         viewModel = HomeViewModel(
             observeLockState = ObserveLockStateUseCase(fakeLockRepository),
-            observeOrientationMode = ObserveOrientationModeUseCase(fakeConfigRepository),
             observeUsageTimer = observeUsageTimer,
             startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
-            setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
             notificationPermissionManager = notificationPermissionManager,
@@ -220,10 +215,8 @@ class ViewModelFlowCompositionTest {
 
         val recreatedViewModel = HomeViewModel(
             observeLockState = ObserveLockStateUseCase(fakeLockRepository),
-            observeOrientationMode = ObserveOrientationModeUseCase(fakeConfigRepository),
             observeUsageTimer = newObserveUsageTimer,
             startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
-            setOrientationMode = SetOrientationModeUseCase(fakeConfigRepository),
             restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
             notificationPermissionManager = notificationPermissionManager,
@@ -303,14 +296,7 @@ class ViewModelFlowCompositionTest {
     // Test fakes
 
     private class FakeConfigRepository : ConfigRepository {
-        private val orientationMode = MutableStateFlow(OrientationMode.FOLLOW_SYSTEM)
         private val debugOverlayVisibleFlow = MutableStateFlow(false)
-
-        override fun observeOrientationMode(): Flow<OrientationMode> = orientationMode
-
-        override suspend fun setOrientationMode(mode: OrientationMode) {
-            orientationMode.value = mode
-        }
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> {
             return debugOverlayVisibleFlow
