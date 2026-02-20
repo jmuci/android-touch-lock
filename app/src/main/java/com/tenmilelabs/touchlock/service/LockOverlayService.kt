@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.platform.haptics.HapticController
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
@@ -31,6 +32,8 @@ class LockOverlayService : LifecycleService() {
     lateinit var permissionManager: OverlayPermissionManager
     @Inject
     lateinit var configRepository: ConfigRepository
+    @Inject
+    lateinit var hapticController: HapticController
 
     private var isServiceRunning = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
@@ -115,6 +118,7 @@ class LockOverlayService : LifecycleService() {
         }
         assertForegroundState(notificationManager.buildLockedNotification())
         _lockState.value = LockState.Locked
+        hapticController.vibrateOnLock()
     }
 
     private fun stopLock() {
@@ -131,6 +135,7 @@ class LockOverlayService : LifecycleService() {
         assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
+        hapticController.vibrateOnUnlock()
     }
 
     /**
