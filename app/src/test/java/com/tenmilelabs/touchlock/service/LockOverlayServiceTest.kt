@@ -3,7 +3,6 @@ package com.tenmilelabs.touchlock.service
 import android.app.Notification
 import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -48,25 +47,14 @@ class LockOverlayServiceTest {
     // ---------------------------------------------------------------------------
 
     private class FakeConfigRepository(
-        initialOrientationMode: OrientationMode = OrientationMode.FOLLOW_SYSTEM,
         initialDebugVisible: Boolean = false,
     ) : ConfigRepository {
-        private val orientationFlow = MutableStateFlow(initialOrientationMode)
         private val debugFlow = MutableStateFlow(initialDebugVisible)
 
-        override fun observeOrientationMode(): Flow<OrientationMode> = orientationFlow
         override fun observeDebugOverlayVisible(): Flow<Boolean> = debugFlow
-
-        override suspend fun setOrientationMode(mode: OrientationMode) {
-            orientationFlow.value = mode
-        }
 
         override suspend fun setDebugOverlayVisible(visible: Boolean) {
             debugFlow.value = visible
-        }
-
-        fun setOrientation(mode: OrientationMode) {
-            orientationFlow.value = mode
         }
     }
 
@@ -117,7 +105,7 @@ class LockOverlayServiceTest {
                 setLockState(LockState.Unlocked) // initService sets Unlocked
             }
 
-            overlayController.show(OrientationMode.FOLLOW_SYSTEM, false) {}
+            overlayController.show(false) {}
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
         }
@@ -210,7 +198,7 @@ class LockOverlayServiceTest {
         val harness = ServiceHarness()
         harness.startLock()
         harness.startLock() // second call must be a no-op
-        verify(exactly = 1) { harness.overlayController.show(any(), any(), any()) }
+        verify(exactly = 1) { harness.overlayController.show(any(), any()) }
         assertThat(getLockState()).isEqualTo(LockState.Locked)
     }
 
@@ -221,7 +209,7 @@ class LockOverlayServiceTest {
 
         harness.startLock()
 
-        verify(exactly = 0) { harness.overlayController.show(any(), any(), any()) }
+        verify(exactly = 0) { harness.overlayController.show(any(), any()) }
         assertThat(getLockState()).isEqualTo(LockState.Unlocked)
     }
 
@@ -229,7 +217,7 @@ class LockOverlayServiceTest {
     fun `startLock calls overlayController show`() {
         val harness = ServiceHarness()
         harness.startLock()
-        verify { harness.overlayController.show(any(), any(), any()) }
+        verify { harness.overlayController.show(any(), any()) }
     }
 
     @org.junit.Test
@@ -368,7 +356,7 @@ class LockOverlayServiceTest {
         harness.tickCountdown()
 
         verify { harness.overlayController.hideCountdownOverlay() }
-        verify { harness.overlayController.show(any(), any(), any()) }
+        verify { harness.overlayController.show(any(), any()) }
     }
 
     // ---------------------------------------------------------------------------

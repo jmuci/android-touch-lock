@@ -23,17 +23,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-        <!-- Transparent activity for orientation locking -->
-        <activity
-            android:name=".ui.OrientationLockActivity"
-            android:exported="false"
-            android:theme="@style/Theme.TouchLock.Transparent"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:taskAffinity=""
-            android:configChanges="orientation|screenSize|keyboardHidden" />
-        
+
         <service
             android:name=".service.LockOverlayService"
             android:foregroundServiceType="specialUse"

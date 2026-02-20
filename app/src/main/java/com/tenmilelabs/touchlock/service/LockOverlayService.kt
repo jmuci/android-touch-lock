@@ -6,19 +6,16 @@ import android.os.Build
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.domain.model.LockState
-import com.tenmilelabs.touchlock.domain.model.OrientationMode
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
-import com.tenmilelabs.touchlock.ui.OrientationLockActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -37,7 +34,6 @@ class LockOverlayService : LifecycleService() {
 
     private var isServiceRunning = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
-    private var pendingLockJob: Job? = null
     private var countdownJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -112,50 +108,13 @@ class LockOverlayService : LifecycleService() {
             initService()
         }
 
-        // Get current orientation mode from persistent configuration and apply it
-        lifecycleScope.launch {
-            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
-                ?: OrientationMode.FOLLOW_SYSTEM
-            Timber.d("startLock: loaded orientation mode from persistent storage: $orientationMode")
-
-            // Start transparent orientation lock activity if orientation is locked
-            if (orientationMode != OrientationMode.FOLLOW_SYSTEM) {
-                val intent = OrientationLockActivity.createStartIntent(
-                    this@LockOverlayService,
-                    orientationMode
-                )
-                startActivity(intent)
-
-                // Small delay to let activity start before showing overlay.
-                // State and notification are only updated after confirming the overlay attached
-                // successfully. The Job is stored so stopLock() can cancel before the delay finishes it if needed.
-                pendingLockJob = launch {
-                    delay(100)
-                    val attached = overlayController.show(orientationMode, debugOverlayVisible) {
-                        stopLock()
-                    }
-                    if (!attached) {
-                        Timber.e("startLock: overlay addView failed (delayed path); aborting lock")
-                        finishOrientationLockActivity()
-                        return@launch
-                    }
-                    assertForegroundState(notificationManager.buildLockedNotification())
-                    _lockState.value = LockState.Locked
-                }
-            } else {
-                // No orientation locking needed, show overlay directly
-                val attached = overlayController.show(orientationMode, debugOverlayVisible) {
-                    stopLock()
-                }
-                if (!attached) {
-                    Timber.e("startLock: overlay addView failed; aborting lock")
-                    return@launch
-                }
-                // Reassert foreground state with locked notification
-                assertForegroundState(notificationManager.buildLockedNotification())
-                _lockState.value = LockState.Locked
-            }
+        val attached = overlayController.show(debugOverlayVisible) { stopLock() }
+        if (!attached) {
+            Timber.e("startLock: overlay addView failed; aborting lock")
+            return
         }
+        assertForegroundState(notificationManager.buildLockedNotification())
+        _lockState.value = LockState.Locked
     }
 
     private fun stopLock() {
@@ -163,29 +122,15 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
-        // Cancel any pending countdown and delayed overlay show to prevent callbacks from firing
+        // Cancel any pending countdown to prevent callbacks from firing
         cancelCountdown()
-        pendingLockJob?.cancel()
-        pendingLockJob = null
 
         overlayController.hide()
-
-        // Finish orientation lock activity if it's running
-        finishOrientationLockActivity()
 
         // Reassert foreground state with unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
-    }
-
-    private fun finishOrientationLockActivity() {
-        Timber.d("finishOrientationLockActivity() sending ACTION_STOP broadcast and direct finish")
-        // Try direct finish first (immediate, no broadcast queue delay)
-        OrientationLockActivity.finishDirectly()
-        // Also send broadcast as fallback in case direct reference is stale
-        val intent = Intent(OrientationLockActivity.ACTION_STOP)
-        sendBroadcast(intent)
     }
 
     /**
@@ -194,15 +139,8 @@ class LockOverlayService : LifecycleService() {
      */
     private fun recreateOverlay() {
         Timber.d("recreateOverlay() called")
-        lifecycleScope.launch {
-            val orientationMode = configRepository.observeOrientationMode().firstOrNull()
-                ?: OrientationMode.FOLLOW_SYSTEM
-
-            overlayController.hide()
-            overlayController.show(orientationMode, debugOverlayVisible) {
-                stopLock()
-            }
-        }
+        overlayController.hide()
+        overlayController.show(debugOverlayVisible) { stopLock() }
     }
 
     /**
@@ -333,13 +271,10 @@ class LockOverlayService : LifecycleService() {
     // Defensive stop. Prevents rare window leaks.
     override fun onDestroy() {
         Timber.d("onDestroy() called")
-        Timber.d("Cleaning up: removing callbacks, hiding overlay, and finishing orientation activity")
+        Timber.d("Cleaning up: removing callbacks and hiding overlay")
         countdownJob?.cancel()
         countdownJob = null
-        pendingLockJob?.cancel()
-        pendingLockJob = null
         overlayController.hide()
-        finishOrientationLockActivity()
         Timber.d("Service destroyed")
         super.onDestroy()
     }
