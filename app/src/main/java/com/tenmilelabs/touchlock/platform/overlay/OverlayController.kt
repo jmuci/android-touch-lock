@@ -39,8 +39,8 @@ class OverlayController @Inject constructor(
         orientationMode: OrientationMode,
         debugTintVisible: Boolean = false,
         onUnlockRequested: () -> Unit
-    ) {
-        if (overlayView != null) return
+    ): Boolean {
+        if (overlayView != null) return true
 
         currentOrientationMode = orientationMode
 
@@ -52,11 +52,13 @@ class OverlayController @Inject constructor(
             },
             debugTintVisible = debugTintVisible
         )
-        try {
+        return try {
             windowManager.addView(overlayView, fullScreenLayoutParams(orientationMode))
+            true
         } catch (e: Exception) {
             Timber.e(e, "Failed to add overlay view")
             overlayView = null
+            false
         }
     }
 

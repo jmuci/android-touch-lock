@@ -122,25 +122,36 @@ class LockOverlayService : LifecycleService() {
                     orientationMode
                 )
                 startActivity(intent)
-                
-                // Small delay to let activity start before showing overlay
+
+                // Small delay to let activity start before showing overlay.
+                // State and notification are only updated inside the runnable, after confirming
+                // the overlay attached successfully.
                 showOverlayRunnable = Runnable {
-                    overlayController.show(orientationMode, debugOverlayVisible) {
+                    val attached = overlayController.show(orientationMode, debugOverlayVisible) {
                         stopLock()
                     }
+                    if (!attached) {
+                        Timber.e("startLock: overlay addView failed (delayed path); aborting lock")
+                        finishOrientationLockActivity()
+                        return@Runnable
+                    }
+                    assertForegroundState(notificationManager.buildLockedNotification())
+                    _lockState.value = LockState.Locked
                 }
                 handler.postDelayed(showOverlayRunnable!!, 100)
             } else {
                 // No orientation locking needed, show overlay directly
-                overlayController.show(orientationMode, debugOverlayVisible) {
+                val attached = overlayController.show(orientationMode, debugOverlayVisible) {
                     stopLock()
                 }
+                if (!attached) {
+                    Timber.e("startLock: overlay addView failed; aborting lock")
+                    return@launch
+                }
+                // Reassert foreground state with locked notification
+                assertForegroundState(notificationManager.buildLockedNotification())
+                _lockState.value = LockState.Locked
             }
-
-            // Reassert foreground state with locked notification
-            assertForegroundState(notificationManager.buildLockedNotification())
-
-            _lockState.value = LockState.Locked
         }
     }
 
