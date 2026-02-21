@@ -1,8 +1,6 @@
 package com.tenmilelabs.touchlock.platform.time
 
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,13 +25,11 @@ interface TimeProvider {
  */
 @Singleton
 class SystemTimeProvider @Inject constructor() : TimeProvider {
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
     override fun currentTimeMillis(): Long {
         return System.currentTimeMillis()
     }
 
     override fun getCurrentDateString(): String {
-        return dateFormat.format(Date())
+        return LocalDate.now().toString()
     }
 }
