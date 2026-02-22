@@ -41,13 +41,13 @@ class HomeViewModel @Inject constructor(
         _areNotificationsAvailable,
         observeUsageTimer(),
         configRepository.observeDebugOverlayVisible()
-    ) { flows ->
+    ) { lockState, hasOverlayPermission, areNotificationsAvailable, usageTimer, debugOverlayVisible ->
         TouchLockUiState(
-            lockState = flows[0] as LockState,
-            hasOverlayPermission = flows[1] as Boolean,
-            areNotificationsAvailable = flows[2] as Boolean,
-            usageTimer = flows[3] as UsageTimerState,
-            debugOverlayVisible = flows[4] as Boolean
+            lockState = lockState,
+            hasOverlayPermission = hasOverlayPermission,
+            areNotificationsAvailable = areNotificationsAvailable,
+            usageTimer = usageTimer,
+            debugOverlayVisible = debugOverlayVisible
         )
     }.stateIn(
         scope = viewModelScope,
