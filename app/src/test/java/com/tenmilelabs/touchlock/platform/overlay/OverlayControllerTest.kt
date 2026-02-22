@@ -1,14 +1,12 @@
 package com.tenmilelabs.touchlock.platform.overlay
 
 import android.content.Context
+import android.content.res.Resources
 import android.util.DisplayMetrics
-import android.view.Display
 import android.view.WindowManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import org.junit.Before
 import org.junit.Test
 
@@ -18,7 +16,7 @@ import org.junit.Test
  * Verifies:
  * - hide/cleanup methods handle WindowManager exceptions gracefully
  * - calling hide without prior show does not crash
- * - H2/H3 fix: displayMetrics delegates to windowManager.defaultDisplay.getRealMetrics()
+ * - displayMetrics delegates to context.resources.displayMetrics
  *   and dpToPx() uses those metrics (not raw dp cast to int)
  *
  * Note: Tests that call show()/showCountdownOverlay() are NOT included here because
@@ -36,19 +34,16 @@ class OverlayControllerTest {
 
     private lateinit var mockContext: Context
     private lateinit var mockWindowManager: WindowManager
-    private lateinit var mockDisplay: Display
+    private lateinit var mockResources: Resources
     private lateinit var controller: OverlayController
 
     @Before
     fun setup() {
-        mockDisplay = mockk(relaxed = true)
-        mockWindowManager = mockk(relaxed = true) {
-            @Suppress("DEPRECATION")
-            every { defaultDisplay } returns mockDisplay
-        }
+        mockWindowManager = mockk(relaxed = true)
+        mockResources = mockk(relaxed = true)
         mockContext = mockk(relaxed = true) {
             every { getSystemService(Context.WINDOW_SERVICE) } returns mockWindowManager
-            every { resources } returns mockk(relaxed = true)
+            every { resources } returns mockResources
             every { theme } returns mockk(relaxed = true)
             every { applicationContext } returns this
         }
@@ -137,34 +132,29 @@ class OverlayControllerTest {
         controller.hide()
     }
 
-    // --- H2/H3 fix: dp-to-px conversion wiring ---
+    // --- dp-to-px conversion wiring ---
 
     @Test
-    fun `displayMetrics delegates to windowManager defaultDisplay getRealMetrics`() {
-        val metricsSlot = slot<DisplayMetrics>()
-        @Suppress("DEPRECATION")
-        every { mockDisplay.getRealMetrics(capture(metricsSlot)) } answers {
-            metricsSlot.captured.density = 3.0f
-            metricsSlot.captured.densityDpi = 480
+    fun `displayMetrics delegates to context resources displayMetrics`() {
+        val fakeMetrics = DisplayMetrics().apply {
+            density = 3.0f
+            densityDpi = 480
         }
+        every { mockResources.displayMetrics } returns fakeMetrics
 
         val metrics = controller.displayMetrics
 
-        @Suppress("DEPRECATION")
-        verify { mockDisplay.getRealMetrics(any()) }
         assertThat(metrics.density).isEqualTo(3.0f)
         assertThat(metrics.densityDpi).isEqualTo(480)
     }
 
     @Test
-    fun `displayMetrics returns fresh instance each call to reflect display changes`() {
-        // On foldables, display metrics can change between fold/unfold.
-        // The property getter should return fresh metrics each time, not cached stale values.
-        val metrics1 = controller.displayMetrics
-        val metrics2 = controller.displayMetrics
+    fun `displayMetrics returns same instance as context resources displayMetrics`() {
+        // context.resources.displayMetrics is the canonical source — verify no extra wrapping.
+        val fakeMetrics = DisplayMetrics()
+        every { mockResources.displayMetrics } returns fakeMetrics
 
-        // Each call should produce a distinct DisplayMetrics object
-        assertThat(metrics1).isNotSameInstanceAs(metrics2)
+        assertThat(controller.displayMetrics).isSameInstanceAs(fakeMetrics)
     }
 
     @Test

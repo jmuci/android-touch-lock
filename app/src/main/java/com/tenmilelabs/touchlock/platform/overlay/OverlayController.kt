@@ -26,13 +26,8 @@ class OverlayController @Inject constructor(
 
     private val handler = Handler(Looper.getMainLooper())
 
-    // Use windowManager display metrics rather than context.resources.displayMetrics so that
-    // dp→px conversions are correct on foldables and multi-display setups (H1 fix).
-    @Suppress("DEPRECATION")
     @VisibleForTesting
-    internal val displayMetrics: DisplayMetrics get() = windowManager.defaultDisplay.let { display ->
-        DisplayMetrics().also { display.getRealMetrics(it) }
-    }
+    internal val displayMetrics: DisplayMetrics get() = context.resources.displayMetrics
 
     @VisibleForTesting
     internal fun dpToPx(dp: Float): Int =
