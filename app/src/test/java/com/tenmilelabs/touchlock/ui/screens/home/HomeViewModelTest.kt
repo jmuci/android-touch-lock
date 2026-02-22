@@ -4,12 +4,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
-import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
-import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
-import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
@@ -70,14 +65,11 @@ class HomeViewModelTest {
         )
 
         viewModel = HomeViewModel(
-            observeLockState = ObserveLockStateUseCase(lockRepository),
+            lockRepository = lockRepository,
+            configRepository = configRepository,
             observeUsageTimer = observeUsageTimerUseCase,
-            startDelayedLock = StartDelayedLockUseCase(lockRepository),
-            restoreNotification = RestoreNotificationUseCase(lockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager,
-            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(configRepository),
-            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(configRepository)
+            notificationPermissionManager = notificationPermissionManager
         )
     }
 
@@ -237,14 +229,11 @@ class HomeViewModelTest {
 
     // Helper function to create a fresh ViewModel with current fake dependencies
     private fun createViewModel() = HomeViewModel(
-        observeLockState = ObserveLockStateUseCase(lockRepository),
+        lockRepository = lockRepository,
+        configRepository = configRepository,
         observeUsageTimer = observeUsageTimerUseCase,
-        startDelayedLock = StartDelayedLockUseCase(lockRepository),
-        restoreNotification = RestoreNotificationUseCase(lockRepository),
         overlayPermissionManager = overlayPermissionManager,
-        notificationPermissionManager = notificationPermissionManager,
-        observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(configRepository),
-        setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(configRepository)
+        notificationPermissionManager = notificationPermissionManager
     )
 
     // Fake implementations for testing

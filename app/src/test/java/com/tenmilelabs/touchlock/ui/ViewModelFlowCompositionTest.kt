@@ -4,12 +4,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
-import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
-import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
-import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
@@ -87,14 +82,11 @@ class ViewModelFlowCompositionTest {
         every { notificationPermissionManager.getNotificationIssueDescription() } returns ""
 
         viewModel = HomeViewModel(
-            observeLockState = ObserveLockStateUseCase(fakeLockRepository),
+            lockRepository = fakeLockRepository,
+            configRepository = fakeConfigRepository,
             observeUsageTimer = observeUsageTimer,
-            startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
-            restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager,
-            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(fakeConfigRepository),
-            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(fakeConfigRepository)
+            notificationPermissionManager = notificationPermissionManager
         )
     }
 
@@ -214,14 +206,11 @@ class ViewModelFlowCompositionTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val recreatedViewModel = HomeViewModel(
-            observeLockState = ObserveLockStateUseCase(fakeLockRepository),
+            lockRepository = fakeLockRepository,
+            configRepository = fakeConfigRepository,
             observeUsageTimer = newObserveUsageTimer,
-            startDelayedLock = StartDelayedLockUseCase(fakeLockRepository),
-            restoreNotification = RestoreNotificationUseCase(fakeLockRepository),
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager,
-            observeDebugOverlayVisible = ObserveDebugOverlayVisibleUseCase(fakeConfigRepository),
-            setDebugOverlayVisible  = SetDebugOverlayVisibleUseCase(fakeConfigRepository)
+            notificationPermissionManager = notificationPermissionManager
         )
 
         // Allow ViewModel flow combination to complete
