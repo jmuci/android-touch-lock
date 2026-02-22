@@ -5,8 +5,11 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.DisplayMetrics
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.annotation.VisibleForTesting
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -22,6 +25,13 @@ class OverlayController @Inject constructor(
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     private val handler = Handler(Looper.getMainLooper())
+
+    @VisibleForTesting
+    internal val displayMetrics: DisplayMetrics get() = context.resources.displayMetrics
+
+    @VisibleForTesting
+    internal fun dpToPx(dp: Float): Int =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, displayMetrics).toInt()
 
     private var overlayView: OverlayView? = null
     private var unlockHandleView: UnlockHandleView? = null
@@ -164,9 +174,10 @@ class OverlayController @Inject constructor(
     }
 
     private fun handleLayoutParams(): WindowManager.LayoutParams {
+        val handleSizePx = dpToPx(HANDLE_SIZE_DP)
         return WindowManager.LayoutParams(
-            HANDLE_SIZE_DP.toInt(),
-            HANDLE_SIZE_DP.toInt(),
+            handleSizePx,
+            handleSizePx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -185,8 +196,8 @@ class OverlayController @Inject constructor(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER
-            x = 16 // 16dp from right
-            y = 100 // 100dp from top
+            x = dpToPx(16f)  // 16dp from center
+            y = dpToPx(100f) // 100dp from top
         }
     }
 

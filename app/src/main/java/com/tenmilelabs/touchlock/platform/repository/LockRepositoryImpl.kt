@@ -8,6 +8,7 @@ import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.service.LockOverlayService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,14 +21,22 @@ class LockRepositoryImpl @Inject constructor(
         val intent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_DELAYED_LOCK
         }
-        ContextCompat.startForegroundService(context, intent)
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: IllegalStateException) {
+            Timber.w(e, "Failed to start foreground service for delayed lock")
+        }
     }
 
     override fun restoreNotification() {
         val intent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_RESTORE_NOTIFICATION
         }
-        ContextCompat.startForegroundService(context, intent)
+        try {
+            context.startService(intent)
+        } catch (e: IllegalStateException) {
+            Timber.w(e, "Failed to restore notification")
+        }
     }
 
     override fun observeLockState(): Flow<LockState> {
