@@ -284,17 +284,6 @@ class LockOverlayService : LifecycleService() {
         super.onDestroy()
     }
 
-    // Log service binding
-    override fun onUnbind(intent: Intent?): Boolean {
-        Timber.d("onUnbind() called with intent action: ${intent?.action}")
-        return super.onUnbind(intent)
-    }
-
-    override fun onRebind(intent: Intent?) {
-        Timber.d("onRebind() called with intent action: ${intent?.action}")
-        super.onRebind(intent)
-    }
-
     companion object {
         const val ACTION_INIT = "com.tenmilelabs.touchlock.INIT"
         const val ACTION_TOGGLE = "com.tenmilelabs.touchlock.TOGGLE"
