@@ -5,9 +5,11 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.annotation.VisibleForTesting
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
@@ -27,11 +29,13 @@ class OverlayController @Inject constructor(
     // Use windowManager display metrics rather than context.resources.displayMetrics so that
     // dp→px conversions are correct on foldables and multi-display setups (H1 fix).
     @Suppress("DEPRECATION")
-    private val displayMetrics get() = windowManager.defaultDisplay.let { display ->
-        android.util.DisplayMetrics().also { display.getRealMetrics(it) }
+    @VisibleForTesting
+    internal val displayMetrics: DisplayMetrics get() = windowManager.defaultDisplay.let { display ->
+        DisplayMetrics().also { display.getRealMetrics(it) }
     }
 
-    private fun dpToPx(dp: Float): Int =
+    @VisibleForTesting
+    internal fun dpToPx(dp: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, displayMetrics).toInt()
 
     private var overlayView: OverlayView? = null
