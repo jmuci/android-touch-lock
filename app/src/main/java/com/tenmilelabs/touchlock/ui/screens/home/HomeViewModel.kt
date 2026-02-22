@@ -4,12 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
-import com.tenmilelabs.touchlock.domain.usecase.ObserveDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.ObserveLockStateUseCase
+import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
-import com.tenmilelabs.touchlock.domain.usecase.RestoreNotificationUseCase
-import com.tenmilelabs.touchlock.domain.usecase.SetDebugOverlayVisibleUseCase
-import com.tenmilelabs.touchlock.domain.usecase.StartDelayedLockUseCase
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,12 +20,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    observeLockState: ObserveLockStateUseCase,
+    private val lockRepository: LockRepository,
+    private val configRepository: ConfigRepository,
     observeUsageTimer: ObserveUsageTimerUseCase,
-    observeDebugOverlayVisible: ObserveDebugOverlayVisibleUseCase,
-    private val startDelayedLock: StartDelayedLockUseCase,
-    private val setDebugOverlayVisible: SetDebugOverlayVisibleUseCase,
-    private val restoreNotification: RestoreNotificationUseCase,
     private val overlayPermissionManager: OverlayPermissionManager,
     private val notificationPermissionManager: NotificationPermissionManager
 ) : ViewModel() {
@@ -42,11 +36,11 @@ class HomeViewModel @Inject constructor(
      * Combines domain state (lock, usage timer) with permission/capability checks.
      */
     val uiState: StateFlow<TouchLockUiState> = combine(
-        observeLockState(),
+        lockRepository.observeLockState(),
         _hasOverlayPermission,
         _areNotificationsAvailable,
         observeUsageTimer(),
-        observeDebugOverlayVisible()
+        configRepository.observeDebugOverlayVisible()
     ) { flows ->
         TouchLockUiState(
             lockState = flows[0] as LockState,
@@ -72,17 +66,17 @@ class HomeViewModel @Inject constructor(
     fun refreshPermissionState() {
         _hasOverlayPermission.value = overlayPermissionManager.hasPermission()
         _areNotificationsAvailable.value = notificationPermissionManager.areNotificationsAvailable()
-        restoreNotification()
+        lockRepository.restoreNotification()
     }
 
     fun onDelayedLockClicked() {
-        startDelayedLock()
+        lockRepository.startDelayedLock()
     }
 
     // Debug-only: Toggles overlay visibility for lifecycle debugging
     fun onDebugOverlayVisibleChanged(visible: Boolean) {
         viewModelScope.launch {
-            setDebugOverlayVisible(visible)
+            configRepository.setDebugOverlayVisible(visible)
         }
     }
 }

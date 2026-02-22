@@ -81,9 +81,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    // Compose Navigation
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -93,13 +90,6 @@ dependencies {
     // Optional - Integration with ViewModels
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-
-    // Coil Image Loader
-    implementation(libs.coil.compose)
-    testImplementation(libs.coil.test)
-
-    // Android Studio Preview support
-    implementation(libs.androidx.material.icons.extended)
 
     // Tests
     testImplementation(libs.junit)
