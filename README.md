@@ -35,6 +35,9 @@ The app works fully **offline** and does not require an account or network acces
 
 - Designed to be simple, transparent, and Play Store-compliant
 
+| Main UI | Unlock Handle | Notification Lock |
+|---------|---------------|-------------------|
+| ![Main UI](docs/screenshots/main_ui.png) | ![Unlock Handle](docs/screenshots/unlock_handle.png) | ![Notification Lock](docs/screenshots/notification_lock.png) |
 
 > Touch Lock does **not** attempt to be a full parental control or kiosk app.
 > It focuses on a single, well-defined problem: temporarily disabling touch input.
