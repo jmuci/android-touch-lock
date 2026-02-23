@@ -3,8 +3,6 @@ package com.tenmilelabs.touchlock.platform.overlay
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Handler
-import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
@@ -12,6 +10,12 @@ import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
 import com.tenmilelabs.touchlock.platform.overlay.UnlockHandleView.Companion.HANDLE_SIZE_DP
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,7 +28,8 @@ class OverlayController @Inject constructor(
     private val windowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var hideHandleJob: Job? = null
 
     @VisibleForTesting
     internal val displayMetrics: DisplayMetrics get() = context.resources.displayMetrics
@@ -36,10 +41,6 @@ class OverlayController @Inject constructor(
     private var overlayView: OverlayView? = null
     private var unlockHandleView: UnlockHandleView? = null
     private var countdownOverlayView: CountdownOverlayView? = null
-
-    private val hideHandleRunnable = Runnable {
-        hideUnlockHandle()
-    }
 
     fun show(
         debugTintVisible: Boolean = false,
@@ -71,7 +72,6 @@ class OverlayController @Inject constructor(
 
         // Clean up unlock handle
         hideUnlockHandle()
-        handler.removeCallbacks(hideHandleRunnable)
 
         // Clean up main overlay
         overlayView?.let {
@@ -143,7 +143,10 @@ class OverlayController @Inject constructor(
         }
 
         // Auto-hide after timeout
-        handler.postDelayed(hideHandleRunnable, HANDLE_VISIBILITY_TIMEOUT_MS)
+        hideHandleJob = scope.launch {
+            delay(HANDLE_VISIBILITY_TIMEOUT_MS)
+            hideUnlockHandle()
+        }
     }
 
     private fun hideUnlockHandle() {
@@ -156,7 +159,10 @@ class OverlayController @Inject constructor(
             }
         }
         unlockHandleView = null
-        handler.removeCallbacks(hideHandleRunnable)
+        hideHandleJob?.cancel()
+        hideHandleJob = null
+        // We cancel itself to make sure we don't leave any dangling
+        // coroutines that might have been on suspend state (eg. supsended with delay)
     }
 
     @SuppressLint("RtlHardcoded")

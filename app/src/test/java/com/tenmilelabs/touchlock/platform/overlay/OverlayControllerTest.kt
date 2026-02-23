@@ -54,7 +54,7 @@ class OverlayControllerTest {
 
     @Test
     fun `OverlayController can be constructed without crash`() {
-        // Verifies Handler(Looper.getMainLooper()) and WindowManager init don't crash
+        // Verifies CoroutineScope and WindowManager init don't crash
         val ctrl = OverlayController(mockContext)
         // Constructor completed without exception
         ctrl.hide() // no-op, shouldn't crash

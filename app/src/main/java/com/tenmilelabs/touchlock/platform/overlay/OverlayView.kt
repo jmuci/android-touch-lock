@@ -23,6 +23,13 @@ class OverlayView(
     debugTintVisible: Boolean = false
 ) : FrameLayout(context) {
 
+    // Handler is used intentionally here instead of coroutines. This View is attached to
+    // WindowManager as a system overlay, outside any Activity/Fragment lifecycle. No
+    // LifecycleOwner is available and this view is short lived, so lifecycle-scoped coroutines cannot be used. Creating
+    // a manual CoroutineScope for simple touch-gesture timing (long-press, double-tap)
+    // would add complexity without benefit over the standard Android View Handler pattern.
+    // The events are touch-event-bound, all in the main thread and tighly inteterleaved
+    // with the event callbacks, so handler makes sense.
     private val handler = Handler(Looper.getMainLooper())
     private var longPressTriggered = false
 
