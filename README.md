@@ -7,42 +7,48 @@
 It is designed for **supervised scenarios**, such as:
 
 - Letting a toddler watch a video without accidentally tapping UI controls
-    
+
 - Preventing hang-ups or unintended interactions during video calls
-    
+
 - Displaying content hands-free (recipes, presentations, timers, etc.)
-    
+
 
 The app works fully **offline** and does not require an account or network access.
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-- 🔒 **Touch-blocking overlay** that prevents all screen interaction
-    
-- 🔔 **Quick activation via persistent notification**
-    
-- 🔄 **Orientation control** (portrait, landscape, or follow system)
+- **Touch-blocking overlay** that prevents all screen interaction
 
-- ⏱ **Daily Usage Tracking** – Tracks how long the lock has been active today
-    
-- 🔓 **Safe unlock gesture** (intentional long-press)
-    
-- 📴 **Works without internet**
-    
-- 🧩 Designed to be simple, transparent, and Play Store–compliant
-    
+- **Quick activation via persistent notification**
 
-> Touch Lock does **not** attempt to be a full parental control or kiosk app.  
+- **10-second countdown** before locking (with cancel option)
+
+- **Daily Usage Tracking** – Tracks how long the lock has been active today
+
+- **Safe unlock gesture** – double-tap to reveal handle, then hold 1 second to unlock
+
+- **Haptic feedback** on lock and unlock
+
+- **Works without internet**
+
+- Designed to be simple, transparent, and Play Store-compliant
+
+| Main UI | Unlock Handle | Notification Lock |
+|---------|---------------|-------------------|
+| ![Main UI](docs/screenshots/main_ui.png) | ![Unlock Handle](docs/screenshots/unlock_handle.png) | ![Notification Lock](docs/screenshots/notification_lock.png) |
+
+> Touch Lock does **not** attempt to be a full parental control or kiosk app.
 > It focuses on a single, well-defined problem: temporarily disabling touch input.
+
 ---
 
 ## How It Works
 
 1. Parent starts a video or app
 
-2. Enables Kids Touch Lock via notification or app UI
+2. Enables Touch Lock via notification or app UI (10-second countdown)
 
 3. Overlay intercepts all touch events
 
@@ -50,47 +56,43 @@ The app works fully **offline** and does not require an account or network acces
 
 5. Usage resets automatically at midnight
 
-> [!Known limitation]:
->Some video call apps (e.g. WhatsApp) may automatically minimize the call to picture-in-picture when touch locking is enabled. This behavior is controlled by the calling app and cannot be overridden safely by Kids Touch Lock.
+> **Known limitations**: 
+> - Gestures on the system UI (drag the notifications bar or press on the navigation menu)
+> - Some video call apps (e.g. WhatsApp) may automatically minimize
+> the call to picture-in-picture when touch locking is enabled. This behavior is
+> controlled by the calling app and cannot be overridden safely by Touch Lock.
 
 ---
 
-## 🚫 What This App Does _Not_ Do (by Design)
+## What This App Does _Not_ Do (by Design)
 
-- It does **not** monitor or inspect other apps’ UI
-    
+- It does **not** monitor or inspect other apps' UI
+
 - It does **not** collect usage data or analytics
-    
-- It does **not** block system gestures (e.g. notification shade)
-    
+
+- It does **not** block system gestures (e.g. notification shade, status bar)
+
 - It does **not** require Accessibility services
-    
+
 
 These constraints are intentional and align with Android platform and Play Store best practices.
 
 ---
 
-## 📚 Technical Documentation
+## Technical Documentation
 
-For comprehensive guides on architecture, debugging, and development:
+For engineering-focused documentation:
 
-- **[Architecture Guide](docs/ARCHITECTURE.md)** – Complete system design, component details, and patterns
-- **[Debugging Guide](docs/DEBUGGING_GUIDE.md)** – Troubleshooting, common issues, and testing scenarios
-- **[Timber Logging Reference](docs/TIMBER_LOGGING.md)** – Debug logging reference and logcat tips
-- **[Documentation Index](docs/README.md)** – Quick start guide and full navigation
-
-See **[docs/README.md](docs/README.md)** for a complete index and quick navigation.
+- **[Architecture Guide](docs/ARCHITECTURE.md)** – System design, data flow, component responsibilities, known constraints
+- **[Debugging Guide](docs/DEBUGGING_GUIDE.md)** – Troubleshooting, logcat tips, common issues
+- **[Testing Guide](docs/TESTING_GUIDE.md)** – Testing strategy, examples, anti-patterns
+- **[Learnings & Tradeoffs](docs/learnings.md)** – Design decisions and why-not-X explanations
 
 ---
 
-## Learnings and Trade Offs
+## Architecture Overview
 
-- See this dedicated document [learnings](docs/learnings.md)
----
-
-## 🏗️ Architecture Overview
-
-Touch Lock follows a **clean, production-oriented architecture**, optimized for correctness, lifecycle safety, and extensibility—without unnecessary complexity.
+Touch Lock follows a clean, layered architecture optimized for correctness and lifecycle safety.
 
 ### High-level layers
 
@@ -108,137 +110,50 @@ Foreground Service + Overlay Runtime
 
 ### Core principles
 
-- **Single source of truth**:  
-    The foreground service owns the lock state. UI only _requests_ changes.
-    
-- **Loose coupling**:  
-    UI does not directly interact with system services or `WindowManager`.
-    
-- **Lifecycle-aware**:  
-    The overlay continues working even if the UI process is killed.
-    
-- **Offline-first**:  
-    No network dependencies; configuration is stored locally.
+- **Single source of truth**: The foreground service owns the lock state. UI only _requests_ changes.
+
+- **Loose coupling**: UI does not directly interact with system services or `WindowManager`.
+
+- **Lifecycle-aware**: The overlay continues working even if the UI process is killed.
+
+- **Offline-first**: No network dependencies; configuration is stored locally via DataStore.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full details.
 
 ---
 
-## Notes
-
-- No user data is collected
-
-- No network access
-
-- Designed to be battery‑efficient
----
-
-## 🧩 Main Components
-
-### UI Layer
-
-- **Jetpack Compose** for all screens
-     
-- **ViewModels + StateFlow** for reactive state handling
-    
-
-### Overlay Runtime
-
-- **Foreground Service** to ensure reliability while the app is backgrounded
-    
-- **WindowManager overlay** (`TYPE_APPLICATION_OVERLAY`) to block touch input
-    
-- Custom overlay view that:
-    
-    - Consumes all touch events
-        
-    - Detects an intentional unlock gesture
-        
-
-### Persistence
-
-- **Preferences DataStore**
-    
-    - Orientation mode
-        
-    - Unlock configuration
-
-    - Usage time
-        
-    
-
-### Dependency Injection
-
-- **Hilt** for DI
-    
-- Singleton repository and controllers
-    
-- Clear separation between Android framework code and business logic
-    
-
----
-
-## 🔐 Permissions & Privacy
-
-Touch Lock requests:
-
-- SYSTEM_ALERT_WINDOW – Required for touch overlay
-
-- FOREGROUND_SERVICE – Required for persistent lock
-
-It also requests for notifications to be enabled for the App.
-
-### Draw over other apps
-
-Required to display the touch-blocking overlay on top of other applications.
-
-- No Accessibility permission is used
-    
-- No data leaves the device
-    
-- No personal information is collected
-    
-
-Permission usage is clearly explained in the UI before redirecting to system settings.
-
----
-
-## 📦 Project Structure (Simplified)
+## Project Structure
 
 ```
-ui/            → Compose UI, ViewModels, navigation
+ui/            → Compose UI, ViewModels, state
 domain/        → Models, use cases, repository interfaces
-platform/      → Repository implementations, DataStore, Overlays, Permissions, Time,
-platform/notification/  → Notification management
-service/       → Foreground service
-permission/    → Overlay permission handling
+platform/      → Repository implementations, DataStore, overlays, permissions, haptics, time
+service/       → Foreground service (LockOverlayService)
 di/            → Hilt modules
 ```
 
 ---
 
-## 🔮 Future Enhancements (Out of Scope for MVP)
+## Permissions & Privacy
 
-- PIN, biometric or pattern-based unlock
+Touch Lock requests:
 
-- Vibrate on unlock and Snackbar or notification.
-     
-- Usage statistics
-    
-- App pinning detection and guidance
-    
-- Tablet / multi-window optimizations
-    
+- `SYSTEM_ALERT_WINDOW` – Required for touch overlay (draw over other apps)
+- `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` – Required for persistent lock
+- `POST_NOTIFICATIONS` – Required to show the persistent notification
+- `VIBRATE` – Haptic feedback on lock/unlock
 
-These are intentionally excluded from the initial release to keep scope tight and risk low.
+No user data is collected. No network access. No data leaves the device.
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-Touch Lock is intended for **temporary, supervised use**.  
+Touch Lock is intended for **temporary, supervised use**.
 It is not a replacement for full parental control solutions or device management tools.
 
 ---
 
-## 📄 License
+## License
 
 MIT License

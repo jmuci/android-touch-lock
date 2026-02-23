@@ -122,7 +122,7 @@ class UnlockHandleView(
     }
 
     companion object {
-        const val HANDLE_SIZE_DP = 300f
+        const val HANDLE_SIZE_DP = 140f
         private const val PRESS_AND_HOLD_DURATION_MS = 1000L
     }
 }
