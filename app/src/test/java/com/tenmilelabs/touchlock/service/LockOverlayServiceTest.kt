@@ -134,7 +134,7 @@ class LockOverlayServiceTest {
             notificationManager.buildCountdownNotification(countdownSecondsRemaining)
         }
 
-        /** Simulates one countdown tick (as the Handler runnable would do). */
+        /** Simulates one countdown tick (as the countdown coroutine would do). */
         fun tickCountdown() {
             if (!isCountdownActive) return
             countdownSecondsRemaining--
