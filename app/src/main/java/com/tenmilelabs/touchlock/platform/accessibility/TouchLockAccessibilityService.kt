@@ -33,6 +33,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var forceUnlockPollJob: Job? = null
     private var lockStateCollectorJob: Job? = null
+    private var dismissShadeJob: Job? = null
 
     // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
     // package in the foreground at the moment the lock engages is known.
@@ -100,10 +101,26 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // as "the shade might have opened, dismiss it" is broader than strictly necessary, but
         // performGlobalAction(DISMISS_NOTIFICATION_SHADE) is a documented no-op when the shade
         // isn't showing, so the false-positive cost is nil.
+        //
+        // Debounced rather than dismissed immediately: confirmed on-device that dismissing while
+        // the pull-down gesture is still in progress just gets the shade re-opened by the same
+        // still-moving finger (the shade tracks the drag directly), so the user never sees it
+        // actually close until they lift their finger. Each new SystemUI event pushes the timer
+        // out, so the dismiss only fires once the gesture has settled.
         if (eventPackage == SYSTEM_UI_PACKAGE) {
-            dismissShade()
+            dismissShadeJob?.cancel()
+            dismissShadeJob = serviceScope.launch {
+                delay(SHADE_DISMISS_DEBOUNCE_MILLIS)
+                dismissShade()
+            }
             return
         }
+
+        // Focus moved away from SystemUI for any reason (including the user closing the shade
+        // themselves) before the debounce fired — cancel it so a stray dismiss doesn't land on
+        // whatever's now in front instead.
+        dismissShadeJob?.cancel()
+        dismissShadeJob = null
 
         if (eventPackage != null && eventPackage != protected) {
             performSnapBack(protected)
@@ -111,9 +128,19 @@ class TouchLockAccessibilityService : AccessibilityService() {
     }
 
     private fun dismissShade() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        val result = performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
-        Timber.d("performGlobalAction(DISMISS_NOTIFICATION_SHADE) returned $result")
+        // GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE alone isn't reliable on every OEM/version —
+        // confirmed on-device (Samsung SM-S908U, Android 16): it did not close an already-expanded
+        // shade even when triggered directly via the underlying system broadcast, bypassing this
+        // service entirely. GLOBAL_ACTION_BACK reliably does close it. Safe to also fire BACK here
+        // because this path only runs while SystemUI's own window was the last thing observed in
+        // the foreground (see the SYSTEM_UI_PACKAGE branch above) — not the protected app, so this
+        // can't back the user out of whatever they're locked into.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val result = performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            Timber.d("performGlobalAction(DISMISS_NOTIFICATION_SHADE) returned $result")
+        }
+        val backResult = performGlobalAction(GLOBAL_ACTION_BACK)
+        Timber.d("performGlobalAction(BACK) returned $backResult")
     }
 
     /**
@@ -196,6 +223,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
         holder.detach()
         forceUnlockPollJob?.cancel()
         lockStateCollectorJob?.cancel()
+        dismissShadeJob?.cancel()
         return super.onUnbind(intent)
     }
 
@@ -209,5 +237,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
     companion object {
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
+        private const val SHADE_DISMISS_DEBOUNCE_MILLIS = 1000L
     }
 }

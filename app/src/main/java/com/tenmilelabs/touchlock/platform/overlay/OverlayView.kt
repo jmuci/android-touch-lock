@@ -6,8 +6,10 @@ import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import timber.log.Timber
+import kotlin.math.abs
 
 /**
  * Full-screen overlay that blocks all touch input.
@@ -32,6 +34,9 @@ class OverlayView(
     // with the event callbacks, so handler makes sense.
     private val handler = Handler(Looper.getMainLooper())
     private var longPressTriggered = false
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var downX = 0f
+    private var downY = 0f
 
     // Double-tap detection
     private var lastTapTime = 0L
@@ -63,6 +68,8 @@ class OverlayView(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 longPressTriggered = false
+                downX = event.rawX
+                downY = event.rawY
                 handler.postDelayed(longPressRunnable, LONG_PRESS_DURATION_MS)
 
                 // Detect double-tap
@@ -86,6 +93,18 @@ class OverlayView(
                 lastTapTime = currentTime
                 handler.removeCallbacks(doubleTapResetRunnable)
                 handler.postDelayed(doubleTapResetRunnable, DOUBLE_TAP_TIMEOUT_MS)
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                // A drag (e.g. pulling the notification shade, which on some OEMs can be started
+                // from anywhere on screen, not just the status bar) must not be misread as a held
+                // long-press. Cancel the long-press timer once the finger moves past touch slop,
+                // same disambiguation Android views use elsewhere between a tap/hold and a drag.
+                val dx = abs(event.rawX - downX)
+                val dy = abs(event.rawY - downY)
+                if (dx > touchSlop || dy > touchSlop) {
+                    handler.removeCallbacks(longPressRunnable)
+                }
             }
 
             MotionEvent.ACTION_UP,
