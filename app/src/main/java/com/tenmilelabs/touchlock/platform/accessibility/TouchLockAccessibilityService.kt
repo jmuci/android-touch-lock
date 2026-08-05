@@ -92,7 +92,15 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // onKeyEvent's BACK consumption below.
         if (allowlist.isAllowlisted(eventPackage)) return
 
-        if (isSystemUiShade(e)) {
+        // The shade's root window reports a generic className (android.widget.FrameLayout on the
+        // device this was verified on — confirmed via live device logs, not a guess) rather than
+        // any OEM-specific class name, so class-name matching isn't reliable. Reading the actual
+        // window title/type instead would need FLAG_RETRIEVE_INTERACTIVE_WINDOWS, which isn't
+        // otherwise needed here. Treating any TYPE_WINDOW_STATE_CHANGED event from SystemUI itself
+        // as "the shade might have opened, dismiss it" is broader than strictly necessary, but
+        // performGlobalAction(DISMISS_NOTIFICATION_SHADE) is a documented no-op when the shade
+        // isn't showing, so the false-positive cost is nil.
+        if (eventPackage == SYSTEM_UI_PACKAGE) {
             dismissShade()
             return
         }
@@ -100,17 +108,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
         if (eventPackage != null && eventPackage != protected) {
             performSnapBack(protected)
         }
-    }
-
-    /**
-     * Best-effort heuristic: matches known AOSP/OEM class-name conventions for the notification
-     * shade's root window. Not validated on-device — needs real-device confirmation, and likely
-     * OEM-specific tuning, before this is relied on in production.
-     */
-    private fun isSystemUiShade(event: AccessibilityEvent): Boolean {
-        if (event.packageName?.toString() != SYSTEM_UI_PACKAGE) return false
-        val className = event.className?.toString() ?: return false
-        return SHADE_CLASS_NAME_HINTS.any { className.contains(it, ignoreCase = true) }
     }
 
     private fun dismissShade() {
@@ -211,12 +208,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
-        private val SHADE_CLASS_NAME_HINTS = listOf(
-            "NotificationShadeWindowView",
-            "NotificationPanelView",
-            "ShadeWindowView",
-            "StatusBarWindowView"
-        )
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
     }
 }

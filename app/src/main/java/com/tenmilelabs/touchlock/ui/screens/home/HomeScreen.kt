@@ -400,10 +400,12 @@ fun AccessibilityDisclosureScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
+                // Sized to content rather than an even split: "Continue to Settings" is
+                // meaningfully longer than "Not now" and wraps to two lines on narrower phones
+                // if both buttons are forced to the same width.
                 OutlinedButton(
                     onClick = onDecline,
                     modifier = Modifier
-                        .weight(1f)
                         .testTag("disclosure_decline_button")
                 ) {
                     Text(stringResource(R.string.strong_lock_disclosure_decline))
@@ -414,7 +416,10 @@ fun AccessibilityDisclosureScreen(
                         .weight(1f)
                         .testTag("disclosure_continue_button")
                 ) {
-                    Text(stringResource(R.string.strong_lock_disclosure_continue))
+                    Text(
+                        text = stringResource(R.string.strong_lock_disclosure_continue),
+                        maxLines = 1
+                    )
                 }
             }
 

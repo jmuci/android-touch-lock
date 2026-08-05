@@ -341,19 +341,22 @@ If the app is never brought to foreground after notification dismissal, the serv
 
 The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast for some users (especially children's parents with slower tapping). A future improvement could make this configurable or use `ViewConfiguration.getDoubleTapTimeout()`.
 
-### Notification Shade Detection Is a Best-Effort Heuristic (Strong Lock)
+### Notification Shade Detection Uses Package Only, Not Class Name (Strong Lock)
 
-`TouchLockAccessibilityService.isSystemUiShade()` identifies the shade by matching
-`event.packageName == "com.android.systemui"` plus a className substring check against known
-AOSP/OEM shade window class names (`NotificationShadeWindowView`, `NotificationPanelView`,
-`ShadeWindowView`, `StatusBarWindowView`). This was **not validated on-device** — Task 0 confirmed
-that `performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)` reliably closes the shade once
-called, but not how to reliably *detect* that it opened, which is OEM/version-dependent. Verify
-this on-device (Samsung One UI's shade class names in particular may differ from AOSP) before
-relying on it; a false negative just means the shade doesn't auto-dismiss (safe), a false positive
-would mean acting on unrelated SystemUI window changes (should be harmless since the only action
-taken is `performGlobalAction`, not touching any actual content or notifications, but still worth
-tightening).
+An earlier version of `TouchLockAccessibilityService` tried to identify the shade specifically by
+matching `event.className` against guessed AOSP/OEM shade window class names
+(`NotificationShadeWindowView`, `NotificationPanelView`, etc.). **Confirmed wrong via live device
+logs** (Samsung SM-S908U, Android 16): the shade's `TYPE_WINDOW_STATE_CHANGED` event reports a
+generic `android.widget.FrameLayout` className, not any OEM-specific class — so the guess never
+matched and the shade never auto-dismissed. Reading the real window title (`dumpsys window`
+confirms it's literally `"NotificationShade"`) would need `FLAG_RETRIEVE_INTERACTIVE_WINDOWS`,
+which isn't otherwise needed anywhere else in this service.
+
+Fixed by dropping class-name matching entirely: any `TYPE_WINDOW_STATE_CHANGED` event whose
+package is `com.android.systemui` triggers `dismissShade()`. This is broader than "only the shade,"
+but `performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)` is a documented no-op when the
+shade isn't open, so a false-positive trigger (e.g. some other SystemUI surface) costs nothing.
+Confirmed working end-to-end on-device.
 
 ---
 
@@ -366,6 +369,5 @@ tightening).
 | `DEBUGGING_GUIDE.md` references removed components | Low | References `OrientationLockActivity`, `ACTION_START`/`ACTION_STOP` (replaced by `ACTION_TOGGLE`). |
 | `README.md` lists "Orientation control" as a feature | Low | Feature was removed. README still lists it. |
 | Countdown coroutine is not tested in isolation | Medium | `startDelayedLock()` relies on `delay()` inside a `LifecycleCoroutineScope`. Tests would need `StandardTestDispatcher` + `advanceTimeBy()`. Current test coverage for countdown is unclear. |
-| Shade-open detection heuristic unverified on-device | Medium | See "Notification Shade Detection Is a Best-Effort Heuristic" above. |
 | `SuppressionAllowlist` Settings/Clock resolution untested | Low | `Intent#resolveActivity()` can't be exercised in pure JVM unit tests (Android SDK stub method); only the own-package/emergency-package/dialer entries have test coverage. Verify the Settings and Clock apps actually resolve on-device. |
 | Snap-back relaunch may fight a foreground-service-restricted launcher on some OEMs | Low | `startActivity()` from an `AccessibilityService` should be exempt from Android's background-activity-launch restrictions, but this is unverified on-device across OEMs. |
