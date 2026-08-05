@@ -25,9 +25,11 @@ class SnapBackDecisionLogicTest {
         var lastRelaunchedPackage: String? = null
             private set
 
-        fun setLocked(locked: Boolean) {
+        fun setLocked(locked: Boolean, knownForegroundPackage: String? = "com.protected.app") {
             if (locked && protectedPackageName == null) {
-                protectedPackageName = "com.protected.app"
+                // Mirrors onServiceConnected()'s capture: uses whatever was last observed, which
+                // can be null if the service (re)connected right as the lock engaged.
+                protectedPackageName = knownForegroundPackage
                 snapBackCount = 0
             } else if (!locked) {
                 protectedPackageName = null
@@ -38,6 +40,12 @@ class SnapBackDecisionLogicTest {
         /** Mirrors onAccessibilityEvent()'s decision logic for a TYPE_WINDOW_STATE_CHANGED event. */
         fun onWindowStateChanged(eventPackage: String) {
             if (!isLocked) return
+            // Edge case fix: adopt the first package observed while locked if the lock-engagement
+            // capture raced and came up null, instead of leaving snap-back disabled all session.
+            if (protectedPackageName == null) {
+                protectedPackageName = eventPackage
+                return
+            }
             val protected = protectedPackageName ?: return
             if (eventPackage in allowlisted) return
             if (eventPackage != protected) performSnapBack(protected)
@@ -164,5 +172,30 @@ class SnapBackDecisionLogicTest {
 
         assertThat(harness.snapBackCount).isEqualTo(1)
         assertThat(harness.forceUnlockTriggered).isFalse()
+    }
+
+    // --- Reconnect race: protected package captured as unknown at lock-engagement time ---
+
+    @Test
+    fun `adopts the first observed package when locked with an unknown protected package`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true, knownForegroundPackage = null)
+
+        harness.onWindowStateChanged("com.was.in.foreground")
+
+        assertThat(harness.lastRelaunchedPackage).isNull()
+        assertThat(harness.snapBackCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `snaps back correctly on subsequent events after adopting an unknown protected package`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true, knownForegroundPackage = null)
+        harness.onWindowStateChanged("com.was.in.foreground")
+
+        harness.onWindowStateChanged("com.launcher")
+
+        assertThat(harness.lastRelaunchedPackage).isEqualTo("com.was.in.foreground")
+        assertThat(harness.snapBackCount).isEqualTo(1)
     }
 }

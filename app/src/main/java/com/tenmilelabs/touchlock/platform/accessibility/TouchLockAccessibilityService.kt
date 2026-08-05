@@ -75,6 +75,16 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // solely on protectedPackageName, which is cleared asynchronously by the collector above
         // and could be briefly stale for one event-loop turn after unlock.
         if (LockOverlayService.lockState.value != LockState.Locked) return
+
+        // Edge case: if the service (re)connects — e.g. Task 4's mid-lock recovery, or the user
+        // re-enabling accessibility — while already Locked, the Unlocked->Locked capture in
+        // onServiceConnected() can race ahead of the first window-state event and capture null.
+        // Adopt the first package observed while locked as the protected one instead of leaving
+        // snap-back permanently disabled for the rest of the session.
+        if (protectedPackageName == null) {
+            protectedPackageName = eventPackage
+            return
+        }
         val protected = protectedPackageName ?: return
 
         // Never suppress, never snap away from, an allowlisted package (Settings, dialer, alarm,
