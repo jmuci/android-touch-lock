@@ -10,6 +10,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.platform.accessibility.AccessibilityServiceHolder
 import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import com.tenmilelabs.touchlock.platform.haptics.HapticController
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
@@ -38,10 +39,13 @@ class LockOverlayService : LifecycleService() {
     lateinit var configRepository: ConfigRepository
     @Inject
     lateinit var hapticController: HapticController
+    @Inject
+    lateinit var accessibilityServiceHolder: AccessibilityServiceHolder
 
     private var isServiceRunning = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
     private var backstopTimeoutMinutes = LockPreferences.DEFAULT_BACKSTOP_TIMEOUT_MINUTES
+    private var wasAccessibilityConnected = false
     private var countdownJob: Job? = null
     private var backstopTimeoutJob: Job? = null
 
@@ -120,6 +124,21 @@ class LockOverlayService : LifecycleService() {
                 .collect { minutes ->
                     backstopTimeoutMinutes = minutes
                 }
+        }
+
+        // Mid-lock recovery: if the accessibility service disconnects while locked (e.g. the user
+        // disables it from Settings), the system tears down its 2032 overlay window and touch
+        // blocking would otherwise silently vanish while lockState still says Locked. Re-attach
+        // via the application-overlay fallback rather than leaving the device unblocked.
+        lifecycleScope.launch {
+            accessibilityServiceHolder.isConnected.collect { isConnected ->
+                if (wasAccessibilityConnected && !isConnected && _lockState.value == LockState.Locked) {
+                    Timber.w("Accessibility service disconnected while locked; re-attaching overlay")
+                    overlayController.hide()
+                    overlayController.show(debugOverlayVisible) { stopLock() }
+                }
+                wasAccessibilityConnected = isConnected
+            }
         }
     }
 
