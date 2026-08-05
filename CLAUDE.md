@@ -6,7 +6,12 @@ Touch Lock is an Android application that temporarily disables touch input by di
 ## Core Constraints
 - **Offline-first**: Must remain fully offline and must not require any network access or backend services
 - **Minimum SDK**: 26 - Do not introduce compatibility code for lower API levels
-- **No Accessibility Services**: Do not introduce Accessibility services or Accessibility permissions unless explicitly instructed
+- **Accessibility Services — scoped use only**: An `AccessibilityService` is permitted *only* for the
+  "Strong Lock" parental-supervision lock enforcement (input suppression + nav-bar overlay while locked).
+  It must never be used to read, record, or exfiltrate screen content. It must stay optional with
+  graceful degradation — the app must work exactly as it does today if accessibility is off, unavailable,
+  or fails. Never set `isAccessibilityTool="true"`. Do not introduce any *other* accessibility-service use
+  case without explicit instruction.
 - **No Kiosk Mode**: Do not introduce kiosk mode, device owner APIs, or system gesture blocking
 
 ## Technology Stack

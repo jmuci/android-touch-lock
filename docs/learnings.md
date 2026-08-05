@@ -219,13 +219,22 @@ Key takeaway:
 
 ## 2. Why Not X? (Design Decisions)
 
-### Why not AccessibilityService?
+### Why not AccessibilityService? (original decision — reversed 2026-08-04, see addendum below)
 
 - Meant for users with disabilities, not general-purpose touch interception
 - Google Play heavily scrutinizes and often rejects misuse
 - Requires intrusive permissions and disclosures
 
-> Conclusion: Using AccessibilityService for a kids lock app is overreaching and risky.
+> Original conclusion: Using AccessibilityService for a kids lock app is overreaching and risky.
+>
+> **Reversed 2026-08-04**: the touch overlay alone cannot block the navigation bar or notification
+> shade, so a supervised child can still tap Home/Back/Recents or pull down the shade and escape the
+> lock — the exact failure mode this app exists to prevent. An `AccessibilityService`, used narrowly
+> and only for that purpose (never to read screen content, never a claimed disability tool), is the only
+> remaining mechanism capable of closing that gap. It ships as an **optional, off-by-default** mode with
+> a dedicated in-app disclosure — the original risk (scope creep, opaque data access) is mitigated by
+> keeping the capability minimal and disclosed, not by avoiding the API outright. See the Task 0 findings
+> below for what was verified on-device before committing to this reversal.
 
 **2026-08-04 addendum — Task 0 spike, device-verified findings.** This decision is under active
 reconsideration (see the "Strong Lock" accessibility plan). Before investing in the real
