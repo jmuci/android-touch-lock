@@ -25,6 +25,17 @@ class SnapBackDecisionLogicTest {
         var lastRelaunchedPackage: String? = null
             private set
 
+        private var suppressSnapBackUntilElapsedMillis = 0L
+
+        /** Test-controlled clock, standing in for SystemClock.elapsedRealtime(). */
+        var currentElapsedMillis = 0L
+
+        /** Mirrors dismissShade()'s grace-window bookkeeping. */
+        fun dismissShade() {
+            suppressSnapBackUntilElapsedMillis =
+                currentElapsedMillis + SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS
+        }
+
         fun setLocked(locked: Boolean, knownForegroundPackage: String? = "com.protected.app") {
             if (locked && protectedPackageName == null) {
                 // Mirrors onServiceConnected()'s capture: uses whatever was last observed, which
@@ -48,7 +59,10 @@ class SnapBackDecisionLogicTest {
             }
             val protected = protectedPackageName ?: return
             if (eventPackage in allowlisted) return
-            if (eventPackage != protected) performSnapBack(protected)
+            if (eventPackage != protected) {
+                if (currentElapsedMillis < suppressSnapBackUntilElapsedMillis) return
+                performSnapBack(protected)
+            }
         }
 
         /** Mirrors onKeyEvent()'s BACK-consumption decision logic. */
@@ -69,6 +83,7 @@ class SnapBackDecisionLogicTest {
 
         companion object {
             private const val MAX_SNAP_BACK_ATTEMPTS = 3
+            private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
         }
     }
 
@@ -196,6 +211,52 @@ class SnapBackDecisionLogicTest {
         harness.onWindowStateChanged("com.launcher")
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.was.in.foreground")
+        assertThat(harness.snapBackCount).isEqualTo(1)
+    }
+
+    // --- Self-action grace window: dismissShade()'s own side effects must never trigger snap-back ---
+    //
+    // Confirmed on-device: performGlobalAction while dismissing the shade generated a spurious
+    // window-state-changed event that got misread as the user leaving the protected app, firing a
+    // real snap-back. Repeating the pull escalated the count, and — left unguarded — would have hit
+    // the rate limit and force-released the lock entirely from nothing but shade dismissal.
+
+    @Test
+    fun `does not snap back for a window-state event immediately following our own dismissShade`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        harness.dismissShade()
+        harness.onWindowStateChanged("com.launcher")
+
+        assertThat(harness.lastRelaunchedPackage).isNull()
+        assertThat(harness.snapBackCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `repeated dismissShade calls never accumulate snap-back attempts while still within the grace window`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        repeat(4) {
+            harness.dismissShade()
+            harness.onWindowStateChanged("com.launcher")
+        }
+
+        assertThat(harness.snapBackCount).isEqualTo(0)
+        assertThat(harness.forceUnlockTriggered).isFalse()
+    }
+
+    @Test
+    fun `snap-back resumes normally once the grace window has elapsed`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+        harness.dismissShade()
+        harness.currentElapsedMillis += 1501L // past the 1500ms grace window
+
+        harness.onWindowStateChanged("com.launcher")
+
+        assertThat(harness.lastRelaunchedPackage).isEqualTo("com.protected.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
     }
 }

@@ -3,6 +3,7 @@ package com.tenmilelabs.touchlock.platform.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.tenmilelabs.touchlock.domain.model.LockState
@@ -43,6 +44,14 @@ class TouchLockAccessibilityService : AccessibilityService() {
     // session" and is itself part of the fail-open guard below.
     private var protectedPackageName: String? = null
     private var snapBackCount = 0
+
+    // Set whenever we dispatch a global action of our own (e.g. dismissing the shade). Confirmed
+    // on-device that this can itself generate a window-state-changed event that gets misread as
+    // the user navigating away, cascading into false snap-back attempts and — after enough of
+    // them — an unintended force-unlock. Any window-state event observed before this elapses is
+    // treated as a likely side effect of our own action, not a real navigation, and ignored for
+    // snap-back purposes.
+    private var suppressSnapBackUntilElapsedMillis = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -123,24 +132,28 @@ class TouchLockAccessibilityService : AccessibilityService() {
         dismissShadeJob = null
 
         if (eventPackage != null && eventPackage != protected) {
+            if (SystemClock.elapsedRealtime() < suppressSnapBackUntilElapsedMillis) {
+                Timber.d("Ignoring window-state event for $eventPackage — within grace window after our own dismissShade action, likely a side effect of it rather than real navigation")
+                return
+            }
             performSnapBack(protected)
         }
     }
 
     private fun dismissShade() {
-        // GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE alone isn't reliable on every OEM/version —
-        // confirmed on-device (Samsung SM-S908U, Android 16): it did not close an already-expanded
-        // shade even when triggered directly via the underlying system broadcast, bypassing this
-        // service entirely. GLOBAL_ACTION_BACK reliably does close it. Safe to also fire BACK here
-        // because this path only runs while SystemUI's own window was the last thing observed in
-        // the foreground (see the SYSTEM_UI_PACKAGE branch above) — not the protected app, so this
-        // can't back the user out of whatever they're locked into.
+        // Confirmed on-device (Samsung SM-S908U, Android 16) that GLOBAL_ACTION_BACK reliably
+        // closes an already-expanded shade where GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE alone
+        // sometimes doesn't — but also confirmed that firing it can itself generate a spurious
+        // window-state-changed event, which cascaded into false snap-back attempts and, after
+        // enough of them, an unintended force-unlock. Not worth that risk: stick to the narrower,
+        // Play-policy-preferred action only. The grace window below covers the (smaller) risk that
+        // this action alone can also occasionally trigger a spurious event.
+        suppressSnapBackUntilElapsedMillis =
+            SystemClock.elapsedRealtime() + SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val result = performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
             Timber.d("performGlobalAction(DISMISS_NOTIFICATION_SHADE) returned $result")
         }
-        val backResult = performGlobalAction(GLOBAL_ACTION_BACK)
-        Timber.d("performGlobalAction(BACK) returned $backResult")
     }
 
     /**
@@ -238,5 +251,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
         private const val SHADE_DISMISS_DEBOUNCE_MILLIS = 1000L
+        private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
     }
 }
