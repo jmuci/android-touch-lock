@@ -341,6 +341,20 @@ If the app is never brought to foreground after notification dismissal, the serv
 
 The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast for some users (especially children's parents with slower tapping). A future improvement could make this configurable or use `ViewConfiguration.getDoubleTapTimeout()`.
 
+### Notification Shade Detection Is a Best-Effort Heuristic (Strong Lock)
+
+`TouchLockAccessibilityService.isSystemUiShade()` identifies the shade by matching
+`event.packageName == "com.android.systemui"` plus a className substring check against known
+AOSP/OEM shade window class names (`NotificationShadeWindowView`, `NotificationPanelView`,
+`ShadeWindowView`, `StatusBarWindowView`). This was **not validated on-device** — Task 0 confirmed
+that `performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)` reliably closes the shade once
+called, but not how to reliably *detect* that it opened, which is OEM/version-dependent. Verify
+this on-device (Samsung One UI's shade class names in particular may differ from AOSP) before
+relying on it; a false negative just means the shade doesn't auto-dismiss (safe), a false positive
+would mean acting on unrelated SystemUI window changes (should be harmless since the only action
+taken is `performGlobalAction`, not touching any actual content or notifications, but still worth
+tightening).
+
 ---
 
 ## Risks / Technical Debt
@@ -352,4 +366,6 @@ The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast 
 | `DEBUGGING_GUIDE.md` references removed components | Low | References `OrientationLockActivity`, `ACTION_START`/`ACTION_STOP` (replaced by `ACTION_TOGGLE`). |
 | `README.md` lists "Orientation control" as a feature | Low | Feature was removed. README still lists it. |
 | Countdown coroutine is not tested in isolation | Medium | `startDelayedLock()` relies on `delay()` inside a `LifecycleCoroutineScope`. Tests would need `StandardTestDispatcher` + `advanceTimeBy()`. Current test coverage for countdown is unclear. |
-| `OverlayController` has no unit tests | Medium | Pure Android class (WindowManager). Would need Robolectric or instrumented tests. |
+| Shade-open detection heuristic unverified on-device | Medium | See "Notification Shade Detection Is a Best-Effort Heuristic" above. |
+| `SuppressionAllowlist` Settings/Clock resolution untested | Low | `Intent#resolveActivity()` can't be exercised in pure JVM unit tests (Android SDK stub method); only the own-package/emergency-package/dialer entries have test coverage. Verify the Settings and Clock apps actually resolve on-device. |
+| Snap-back relaunch may fight a foreground-service-restricted launcher on some OEMs | Low | `startActivity()` from an `AccessibilityService` should be exempt from Android's background-activity-launch restrictions, but this is unverified on-device across OEMs. |
