@@ -40,4 +40,7 @@
     <string name="transparent_black_AA">#AA000000</string>
     <string name="countdown_overlay_locking">Locking...</string>
     <string name="unlock_handle_press_and_hold_to_unlock">Press and\nhold to\nunlock</string>
+
+    <!-- Strong Lock (accessibility) -->
+    <string name="accessibility_service_description">Used only while Touch Lock is active, to block navigation bar taps and bring the protected app back to the front if you navigate away. Never reads or shares what\'s on your screen.</string>
 </resources>
