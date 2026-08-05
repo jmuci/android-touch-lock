@@ -8,6 +8,7 @@ import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
+import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import io.mockk.every
@@ -36,6 +37,7 @@ class HomeViewModelTest {
     private lateinit var observeUsageTimerUseCase: ObserveUsageTimerUseCase
     private lateinit var overlayPermissionManager: OverlayPermissionManager
     private lateinit var notificationPermissionManager: NotificationPermissionManager
+    private lateinit var accessibilityPermissionManager: AccessibilityPermissionManager
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -50,17 +52,19 @@ class HomeViewModelTest {
         fakeClock.setDate("2024-01-15")
         overlayPermissionManager = mockk(relaxed = true)
         notificationPermissionManager = mockk(relaxed = true)
+        accessibilityPermissionManager = mockk(relaxed = true)
 
         // Set up default mock behavior
         every { overlayPermissionManager.hasPermission() } returns false
         every { notificationPermissionManager.areNotificationsAvailable() } returns false
         every { notificationPermissionManager.getNotificationIssueDescription() } returns ""
+        every { accessibilityPermissionManager.isEnabled() } returns false
 
         // Create and store the ObserveUsageTimerUseCase to clean it up later
         observeUsageTimerUseCase = ObserveUsageTimerUseCase(
-            lockRepository, 
-            fakeLockPreferences, 
-            fakeClock, 
+            lockRepository,
+            fakeLockPreferences,
+            fakeClock,
             testDispatcher
         )
 
@@ -69,7 +73,8 @@ class HomeViewModelTest {
             configRepository = configRepository,
             observeUsageTimer = observeUsageTimerUseCase,
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            accessibilityPermissionManager = accessibilityPermissionManager
         )
     }
 
@@ -227,13 +232,34 @@ class HomeViewModelTest {
         }
     }
 
+    @Test
+    fun `uiState isAccessibilityEnabled is false when service is not enabled`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().isAccessibilityEnabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `refreshPermissionState updates accessibility enabled state in uiState`() = runTest {
+        viewModel.uiState.test {
+            assertThat(awaitItem().isAccessibilityEnabled).isFalse()
+
+            every { accessibilityPermissionManager.isEnabled() } returns true
+            viewModel.refreshPermissionState()
+            advanceUntilIdle()
+
+            assertThat(awaitItem().isAccessibilityEnabled).isTrue()
+        }
+    }
+
     // Helper function to create a fresh ViewModel with current fake dependencies
     private fun createViewModel() = HomeViewModel(
         lockRepository = lockRepository,
         configRepository = configRepository,
         observeUsageTimer = observeUsageTimerUseCase,
         overlayPermissionManager = overlayPermissionManager,
-        notificationPermissionManager = notificationPermissionManager
+        notificationPermissionManager = notificationPermissionManager,
+        accessibilityPermissionManager = accessibilityPermissionManager
     )
 
     // Fake implementations for testing

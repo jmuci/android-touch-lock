@@ -43,4 +43,18 @@
 
     <!-- Strong Lock (accessibility) -->
     <string name="accessibility_service_description">Used only while Touch Lock is active, to block navigation bar taps and bring the protected app back to the front if you navigate away. Never reads or shares what\'s on your screen.</string>
+
+    <string name="strong_lock_upsell_title">Strong Lock available</string>
+    <string name="strong_lock_upsell_description">Also block navigation bar taps and auto-return to the locked app if it\'s swiped away. Optional, off by default.</string>
+    <string name="strong_lock_upsell_learn_more">Learn more</string>
+
+    <string name="strong_lock_disclosure_title">Turn on Strong Lock?</string>
+    <string name="strong_lock_disclosure_what_it_does_title">What Strong Lock does</string>
+    <string name="strong_lock_disclosure_what_it_does_body">Strong Lock uses an Android Accessibility service to reinforce Touch Lock while it\'s active: it blocks taps on the navigation bar (Home, Back, Recents) and brings the protected app back to the front if it\'s navigated away from.</string>
+    <string name="strong_lock_disclosure_data_title">What data it accesses</string>
+    <string name="strong_lock_disclosure_data_body">While active, the service receives window-change events containing the package name of the app currently in the foreground (for example, \"com.google.android.youtube\"). It does not read text, images, or any other on-screen content, and it does not require touch-exploration or screen-content access.</string>
+    <string name="strong_lock_disclosure_sharing_title">How it\'s used and shared</string>
+    <string name="strong_lock_disclosure_sharing_body">This information is used only to keep the protected app in front while Touch Lock is active. It is processed entirely on your device and is never transmitted, stored remotely, or shared with anyone.</string>
+    <string name="strong_lock_disclosure_decline">Not now</string>
+    <string name="strong_lock_disclosure_continue">Continue to Settings</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.tenmilelabs.touchlock.ui.screens.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -22,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -42,9 +47,11 @@ import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 fun HomeScreen(
     viewModel: HomeViewModel,
     onRequestOverlayPermission: () -> Unit,
-    onRequestNotificationPermission: () -> Unit
+    onRequestNotificationPermission: () -> Unit,
+    onRequestAccessibilityPermission: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showAccessibilityDisclosure by rememberSaveable { mutableStateOf(false) }
 
     // Refresh permission state when app resumes
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -60,16 +67,29 @@ fun HomeScreen(
         }
     }
 
+    if (showAccessibilityDisclosure) {
+        AccessibilityDisclosureScreen(
+            onDecline = { showAccessibilityDisclosure = false },
+            onContinueToSettings = {
+                showAccessibilityDisclosure = false
+                onRequestAccessibilityPermission()
+            }
+        )
+        return
+    }
+
     HomeScreenContent(
         lockState = uiState.lockState,
         hasOverlayPermission = uiState.hasOverlayPermission,
         areNotificationsAvailable = uiState.areNotificationsAvailable,
+        isAccessibilityEnabled = uiState.isAccessibilityEnabled,
         notificationIssueDescription = viewModel.notificationIssueDescription,
         usageTimer = uiState.usageTimer,
         debugOverlayVisible = uiState.debugOverlayVisible,
         onDelayedLockClicked = viewModel::onDelayedLockClicked,
         onRequestOverlayPermission = onRequestOverlayPermission,
         onRequestNotificationPermission = onRequestNotificationPermission,
+        onLearnAboutStrongLock = { showAccessibilityDisclosure = true },
         onDebugOverlayVisibleChanged = viewModel::onDebugOverlayVisibleChanged
     )
 }
@@ -79,12 +99,14 @@ internal fun HomeScreenContent(
     lockState: LockState,
     hasOverlayPermission: Boolean,
     areNotificationsAvailable: Boolean,
+    isAccessibilityEnabled: Boolean,
     notificationIssueDescription: String,
     usageTimer: UsageTimerState,
     debugOverlayVisible: Boolean,
     onDelayedLockClicked: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onLearnAboutStrongLock: () -> Unit,
     onDebugOverlayVisibleChanged: (Boolean) -> Unit
 ) {
     Column(
@@ -140,6 +162,13 @@ internal fun HomeScreenContent(
             )
         } else {
             HowToUseCard(Modifier.padding(vertical = 16.dp))
+
+            if (!isAccessibilityEnabled) {
+                StrongLockUpsellCard(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    onLearnMoreClicked = onLearnAboutStrongLock
+                )
+            }
 
             UsageTimerCard(
                 modifier = Modifier.padding(vertical = 16.dp),
@@ -263,6 +292,133 @@ fun NotificationWarningCard(
             ) {
                 Text(stringResource(R.string.enable_notifications))
             }
+        }
+    }
+}
+
+@Composable
+fun StrongLockUpsellCard(
+    modifier: Modifier,
+    onLearnMoreClicked: () -> Unit
+) {
+    Surface(
+        shadowElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.strong_lock_upsell_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_upsell_description),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            OutlinedButton(onClick = onLearnMoreClicked) {
+                Text(stringResource(R.string.strong_lock_upsell_learn_more))
+            }
+        }
+    }
+}
+
+/**
+ * Dedicated, standalone disclosure screen for the optional Strong Lock accessibility service.
+ * Play policy requires: a dedicated screen with no unrelated content, a description of what data
+ * is accessed, how it's used and shared, and an explicit affirmative action to proceed — back
+ * press or tapping away must never count as consent or take the user to Settings.
+ */
+@Composable
+fun AccessibilityDisclosureScreen(
+    onDecline: () -> Unit,
+    onContinueToSettings: () -> Unit
+) {
+    // System back = decline, never proceed to Settings.
+    BackHandler(onBack = onDecline)
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_title),
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_what_it_does_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_what_it_does_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_data_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_data_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_sharing_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_sharing_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                OutlinedButton(
+                    onClick = onDecline,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("disclosure_decline_button")
+                ) {
+                    Text(stringResource(R.string.strong_lock_disclosure_decline))
+                }
+                Button(
+                    onClick = onContinueToSettings,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("disclosure_continue_button")
+                ) {
+                    Text(stringResource(R.string.strong_lock_disclosure_continue))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -400,12 +556,14 @@ private fun HomeScreenUnlockedPreview() {
             lockState = LockState.Unlocked,
             hasOverlayPermission = true,
             areNotificationsAvailable = true,
+            isAccessibilityEnabled = false,
             notificationIssueDescription = "",
             usageTimer = UsageTimerState(elapsedMillisToday = 125000, isRunning = false),
             debugOverlayVisible = false,
             onDelayedLockClicked = {},
             onRequestOverlayPermission = {},
             onRequestNotificationPermission = {},
+            onLearnAboutStrongLock = {},
             onDebugOverlayVisibleChanged = {}
         )
     }
@@ -419,12 +577,14 @@ private fun HomeScreenLockedPreview() {
             lockState = LockState.Locked,
             hasOverlayPermission = true,
             areNotificationsAvailable = true,
+            isAccessibilityEnabled = false,
             notificationIssueDescription = "",
             usageTimer = UsageTimerState(elapsedMillisToday = 450000, isRunning = true),
             debugOverlayVisible = false,
             onDelayedLockClicked = {},
             onRequestOverlayPermission = {},
             onRequestNotificationPermission = {},
+            onLearnAboutStrongLock = {},
             onDebugOverlayVisibleChanged = {}
         )
     }
@@ -448,12 +608,14 @@ private fun HomeScreenNoPermissionPreview() {
             lockState = LockState.Unlocked,
             hasOverlayPermission = false,
             areNotificationsAvailable = true,
+            isAccessibilityEnabled = false,
             notificationIssueDescription = "",
             usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
             debugOverlayVisible = false,
             onDelayedLockClicked = {},
             onRequestOverlayPermission = {},
             onRequestNotificationPermission = {},
+            onLearnAboutStrongLock = {},
             onDebugOverlayVisibleChanged = {}
         )
     }
@@ -467,13 +629,37 @@ private fun HomeScreenNotificationsBlockedPreview() {
             lockState = LockState.Unlocked,
             hasOverlayPermission = true,
             areNotificationsAvailable = false,
+            isAccessibilityEnabled = false,
             notificationIssueDescription = "Notifications are disabled for Touch Lock. Enable them to lock/unlock from the notification drawer.",
             usageTimer = UsageTimerState(elapsedMillisToday = 0, isRunning = false),
             debugOverlayVisible = false,
             onDelayedLockClicked = {},
             onRequestOverlayPermission = {},
             onRequestNotificationPermission = {},
+            onLearnAboutStrongLock = {},
             onDebugOverlayVisibleChanged = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Strong Lock Upsell Card")
+@Composable
+private fun StrongLockUpsellCardPreview() {
+    MaterialTheme {
+        StrongLockUpsellCard(
+            modifier = Modifier.padding(16.dp),
+            onLearnMoreClicked = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Strong Lock Disclosure")
+@Composable
+private fun AccessibilityDisclosureScreenPreview() {
+    MaterialTheme {
+        AccessibilityDisclosureScreen(
+            onDecline = {},
+            onContinueToSettings = {}
         )
     }
 }
