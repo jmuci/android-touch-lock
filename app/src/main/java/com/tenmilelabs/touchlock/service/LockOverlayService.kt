@@ -1,12 +1,16 @@
 package com.tenmilelabs.touchlock.service
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
+import com.tenmilelabs.touchlock.platform.datastore.LockPreferences
 import com.tenmilelabs.touchlock.platform.haptics.HapticController
 import com.tenmilelabs.touchlock.platform.notification.LockNotificationManager
 import com.tenmilelabs.touchlock.platform.overlay.OverlayController
@@ -37,7 +41,23 @@ class LockOverlayService : LifecycleService() {
 
     private var isServiceRunning = false
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
+    private var backstopTimeoutMinutes = LockPreferences.DEFAULT_BACKSTOP_TIMEOUT_MINUTES
     private var countdownJob: Job? = null
+    private var backstopTimeoutJob: Job? = null
+
+    // Safety valve: screen off always releases suppression, independent of the accessibility
+    // service or any other lock-escape mechanism.
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Timber.d("ACTION_SCREEN_OFF received, releasing lock (safety valve)")
+            stopLock()
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -49,6 +69,7 @@ class LockOverlayService : LifecycleService() {
             ACTION_CANCEL_COUNTDOWN -> cancelCountdown()
             ACTION_RESTORE_NOTIFICATION -> restoreNotification()
             ACTION_DISMISS -> dismissService()
+            ACTION_FORCE_UNLOCK -> forceUnlock()
             null -> {
                 // Service restarted by system (START_STICKY)
                 // Re-initialize with idle (unlocked) state. Configuration is persisted in DataStore.
@@ -92,6 +113,14 @@ class LockOverlayService : LifecycleService() {
                     }
                 }
         }
+
+        lifecycleScope.launch {
+            configRepository.observeBackstopTimeoutMinutes()
+                .distinctUntilChanged()
+                .collect { minutes ->
+                    backstopTimeoutMinutes = minutes
+                }
+        }
     }
 
     private fun startLock() {
@@ -119,6 +148,14 @@ class LockOverlayService : LifecycleService() {
         assertForegroundState(notificationManager.buildLockedNotification())
         _lockState.value = LockState.Locked
         hapticController.vibrateOnLock()
+
+        // Safety valve: mandatory backstop auto-unlock, regardless of any other escape mechanism.
+        backstopTimeoutJob?.cancel()
+        backstopTimeoutJob = lifecycleScope.launch {
+            delay(backstopTimeoutMinutes * MILLIS_PER_MINUTE)
+            Timber.d("Backstop timeout reached ($backstopTimeoutMinutes min), auto-unlocking")
+            stopLock()
+        }
     }
 
     private fun stopLock() {
@@ -126,8 +163,10 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Unlocked) return
 
-        // Cancel any pending countdown to prevent callbacks from firing
+        // Cancel any pending countdown/backstop callbacks FIRST, before transitioning state
         cancelCountdown()
+        backstopTimeoutJob?.cancel()
+        backstopTimeoutJob = null
 
         overlayController.hide()
 
@@ -136,6 +175,16 @@ class LockOverlayService : LifecycleService() {
 
         _lockState.value = LockState.Unlocked
         hapticController.vibrateOnUnlock()
+    }
+
+    /**
+     * Safety valve: Vol-Up + Vol-Down held for 3s (detected by the accessibility service, when
+     * enabled) force-unlocks regardless of overlay/accessibility state. Delegates to the same
+     * stopLock() path — already a no-op when unlocked.
+     */
+    private fun forceUnlock() {
+        Timber.d("forceUnlock() called (safety valve)")
+        stopLock()
     }
 
     /**
@@ -279,6 +328,13 @@ class LockOverlayService : LifecycleService() {
         Timber.d("Cleaning up: removing callbacks and hiding overlay")
         countdownJob?.cancel()
         countdownJob = null
+        backstopTimeoutJob?.cancel()
+        backstopTimeoutJob = null
+        try {
+            unregisterReceiver(screenOffReceiver)
+        } catch (e: IllegalArgumentException) {
+            Timber.w(e, "screenOffReceiver was not registered")
+        }
         overlayController.hide()
         Timber.d("Service destroyed")
         super.onDestroy()
@@ -291,9 +347,11 @@ class LockOverlayService : LifecycleService() {
         const val ACTION_CANCEL_COUNTDOWN = "com.tenmilelabs.touchlock.CANCEL_COUNTDOWN"
         const val ACTION_RESTORE_NOTIFICATION = "com.tenmilelabs.touchlock.RESTORE_NOTIFICATION"
         const val ACTION_DISMISS = "com.tenmilelabs.touchlock.DISMISS"
+        const val ACTION_FORCE_UNLOCK = "com.tenmilelabs.touchlock.FORCE_UNLOCK"
         const val NOTIFICATION_ID = 1
 
         private const val COUNTDOWN_DURATION_SECONDS = 10
+        private const val MILLIS_PER_MINUTE = 60_000L
 
         // This makes the lock state process‑global for the service, rather than tied to a specific instance, making it survive
         // service recreation even if the service is re-started, as long as the app process is alive.

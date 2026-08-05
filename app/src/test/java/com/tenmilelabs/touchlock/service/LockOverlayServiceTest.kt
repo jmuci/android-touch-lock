@@ -48,13 +48,21 @@ class LockOverlayServiceTest {
 
     private class FakeConfigRepository(
         initialDebugVisible: Boolean = false,
+        initialBackstopTimeoutMinutes: Int = 60,
     ) : ConfigRepository {
         private val debugFlow = MutableStateFlow(initialDebugVisible)
+        private val backstopTimeoutFlow = MutableStateFlow(initialBackstopTimeoutMinutes)
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> = debugFlow
 
         override suspend fun setDebugOverlayVisible(visible: Boolean) {
             debugFlow.value = visible
+        }
+
+        override fun observeBackstopTimeoutMinutes(): Flow<Int> = backstopTimeoutFlow
+
+        override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
+            backstopTimeoutFlow.value = minutes
         }
     }
 
@@ -80,6 +88,7 @@ class LockOverlayServiceTest {
         private var isServiceRunning = false
         private var isCountdownActive = false
         private var countdownSecondsRemaining = 0
+        private var isBackstopTimeoutScheduled = false
         private val fakeNotification: Notification = mockk(relaxed = true)
 
         init {
@@ -108,6 +117,7 @@ class LockOverlayServiceTest {
             overlayController.show(false) {}
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
+            isBackstopTimeoutScheduled = true
         }
 
         /** Mirrors LockOverlayService.stopLock() decision logic. */
@@ -115,9 +125,28 @@ class LockOverlayServiceTest {
             if (getLockState() == LockState.Unlocked) return
 
             cancelCountdown()
+            isBackstopTimeoutScheduled = false
             overlayController.hide()
             notificationManager.buildUnlockedNotification()
             setLockState(LockState.Unlocked)
+        }
+
+        /** Mirrors LockOverlayService.forceUnlock() decision logic: always delegates to stopLock(). */
+        fun forceUnlock() {
+            stopLock()
+        }
+
+        fun isBackstopTimeoutScheduled() = isBackstopTimeoutScheduled
+
+        /** Simulates the backstop timeout firing (as the delayed coroutine would). */
+        fun triggerBackstopTimeout() {
+            if (!isBackstopTimeoutScheduled) return
+            stopLock()
+        }
+
+        /** Simulates ACTION_SCREEN_OFF being received. */
+        fun onScreenOff() {
+            stopLock()
         }
 
         /** Mirrors LockOverlayService.startDelayedLock() decision logic. */
@@ -465,5 +494,101 @@ class LockOverlayServiceTest {
         harness.startDelayedLock(durationSeconds = 7)
 
         verify { harness.notificationManager.buildCountdownNotification(7) }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: safety valves (Task 3)
+    // ---------------------------------------------------------------------------
+
+    @org.junit.Test
+    fun `forceUnlock releases an active lock`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.forceUnlock()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    @org.junit.Test
+    fun `forceUnlock is a no-op when already unlocked`() {
+        val harness = ServiceHarness()
+
+        harness.forceUnlock()
+
+        verify(exactly = 0) { harness.overlayController.hide() }
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    @org.junit.Test
+    fun `startLock schedules the backstop timeout`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        assertThat(harness.isBackstopTimeoutScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `stopLock cancels the backstop timeout before transitioning`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+        assertThat(harness.isBackstopTimeoutScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `backstop timeout firing releases the lock`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.triggerBackstopTimeout()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    @org.junit.Test
+    fun `backstop timeout is a no-op if lock was already released`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        harness.triggerBackstopTimeout()
+
+        // stopLock's overlayController.hide() should only have been invoked once, by the
+        // explicit stopLock() call above — the stale backstop trigger must not act again.
+        verify(exactly = 1) { harness.overlayController.hide() }
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    @org.junit.Test
+    fun `re-locking cancels the previous backstop timeout`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        assertThat(harness.isBackstopTimeoutScheduled()).isFalse()
+
+        harness.startLock()
+        assertThat(harness.isBackstopTimeoutScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `screen off releases an active lock`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.onScreenOff()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        assertThat(harness.isBackstopTimeoutScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `screen off is a no-op when already unlocked`() {
+        val harness = ServiceHarness()
+
+        harness.onScreenOff()
+
+        verify(exactly = 0) { harness.overlayController.hide() }
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
     }
 }

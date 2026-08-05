@@ -292,6 +292,7 @@ class ViewModelFlowCompositionTest {
 
     private class FakeConfigRepository : ConfigRepository {
         private val debugOverlayVisibleFlow = MutableStateFlow(false)
+        private val backstopTimeoutMinutesFlow = MutableStateFlow(60)
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> {
             return debugOverlayVisibleFlow
@@ -299,6 +300,14 @@ class ViewModelFlowCompositionTest {
 
         override suspend fun setDebugOverlayVisible(visible: Boolean) {
             debugOverlayVisibleFlow.value = visible
+        }
+
+        override fun observeBackstopTimeoutMinutes(): Flow<Int> {
+            return backstopTimeoutMinutesFlow
+        }
+
+        override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
+            backstopTimeoutMinutesFlow.value = minutes
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -31,6 +32,7 @@ class LockPreferences @Inject constructor(
         val USAGE_LAST_START_TIME = longPreferencesKey("usage_last_start_time")
         // Debug-only: Makes overlay visible for lifecycle debugging
         val DEBUG_OVERLAY_VISIBLE = booleanPreferencesKey("debug_overlay_visible")
+        val BACKSTOP_TIMEOUT_MINUTES = intPreferencesKey("backstop_timeout_minutes")
     }
 
     // Debug-only: Observe overlay visibility setting (for debugging overlay lifecycle issues)
@@ -43,6 +45,23 @@ class LockPreferences @Inject constructor(
     suspend fun setDebugOverlayVisible(visible: Boolean) {
         dataStore.edit { preferences ->
             preferences[Keys.DEBUG_OVERLAY_VISIBLE] = visible
+        }
+    }
+
+    /**
+     * Mandatory backstop auto-unlock timeout. Safety valve: even with no other escape used, the
+     * lock always releases itself after this many minutes. Not settable to off/infinite — always
+     * clamped to [1, MAX_BACKSTOP_TIMEOUT_MINUTES].
+     */
+    val backstopTimeoutMinutes: Flow<Int> = dataStore.data
+        .map { preferences ->
+            (preferences[Keys.BACKSTOP_TIMEOUT_MINUTES] ?: DEFAULT_BACKSTOP_TIMEOUT_MINUTES)
+                .coerceIn(1, MAX_BACKSTOP_TIMEOUT_MINUTES)
+        }
+
+    suspend fun setBackstopTimeoutMinutes(minutes: Int) {
+        dataStore.edit { preferences ->
+            preferences[Keys.BACKSTOP_TIMEOUT_MINUTES] = minutes.coerceIn(1, MAX_BACKSTOP_TIMEOUT_MINUTES)
         }
     }
 
@@ -107,5 +126,10 @@ class LockPreferences @Inject constructor(
             preferences.remove(Keys.USAGE_ACCUMULATED_MILLIS)
             preferences.remove(Keys.USAGE_LAST_START_TIME)
         }
+    }
+
+    companion object {
+        const val DEFAULT_BACKSTOP_TIMEOUT_MINUTES = 60
+        const val MAX_BACKSTOP_TIMEOUT_MINUTES = 120
     }
 }
