@@ -81,6 +81,31 @@ class OverlayControllerTest {
     }
 
     @Test
+    fun `resolveTarget uses the application WindowManager and TYPE_APPLICATION_OVERLAY when accessibility is not connected`() {
+        every { accessibilityServiceHolder.currentService() } returns null
+
+        val (manager, type) = controller.resolveTarget()
+
+        assertThat(manager).isSameInstanceAs(mockWindowManager)
+        assertThat(type).isEqualTo(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+    }
+
+    @Test
+    fun `resolveTarget uses the connected service's own WindowManager and TYPE_ACCESSIBILITY_OVERLAY when accessibility is connected`() {
+        val serviceWindowManager = mockk<WindowManager>(relaxed = true)
+        val service = mockk<TouchLockAccessibilityService>(relaxed = true) {
+            every { getSystemService(Context.WINDOW_SERVICE) } returns serviceWindowManager
+        }
+        every { accessibilityServiceHolder.currentService() } returns service
+
+        val (manager, type) = controller.resolveTarget()
+
+        assertThat(manager).isSameInstanceAs(serviceWindowManager)
+        assertThat(manager).isNotSameInstanceAs(mockWindowManager)
+        assertThat(type).isEqualTo(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+    }
+
+    @Test
     fun `statusBarHeightPx does not crash when the resource is absent`() {
         every { mockResources.getIdentifier("status_bar_height", "dimen", "android") } returns 0
 

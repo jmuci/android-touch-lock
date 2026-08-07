@@ -69,7 +69,8 @@ class OverlayController @Inject constructor(
      * window via the app's own WindowManager throws BadTokenException, it must go through the
      * service's WindowManager instance.
      */
-    private fun resolveTarget(): Pair<WindowManager, Int> {
+    @VisibleForTesting
+    internal fun resolveTarget(): Pair<WindowManager, Int> {
         val service = accessibilityServiceHolder.currentService()
         return if (service != null) {
             (service.getSystemService(Context.WINDOW_SERVICE) as WindowManager) to

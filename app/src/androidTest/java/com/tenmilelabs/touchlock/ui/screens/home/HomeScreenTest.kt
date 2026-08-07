@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.espresso.Espresso
 import com.tenmilelabs.touchlock.domain.model.LockState
 import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -334,5 +335,141 @@ class HomeScreenTest {
         setContent()
 
         composeTestRule.onNodeWithText("Touch Lock App").assertIsDisplayed()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Toddler-Proof Lock upsell card (StrongLockUpsellCard)
+    // ---------------------------------------------------------------------------
+
+    @Test
+    fun accessibilityNotEnabled_showsUpsellCard() {
+        setContent(lockState = LockState.Unlocked, isAccessibilityEnabled = false)
+
+        composeTestRule.onNodeWithText("Toddler-Proof Lock available")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun accessibilityEnabled_hidesUpsellCard() {
+        setContent(lockState = LockState.Unlocked, isAccessibilityEnabled = true)
+
+        composeTestRule.onNodeWithText("Toddler-Proof Lock available").assertDoesNotExist()
+    }
+
+    @Test
+    fun upsellCard_learnMoreButton_invokesOnLearnAboutStrongLockCallback() {
+        var callbackInvoked = false
+        setContent(
+            isAccessibilityEnabled = false,
+            onLearnAboutStrongLock = { callbackInvoked = true },
+        )
+
+        composeTestRule.onNodeWithTag("strong_lock_upsell_learn_more_button")
+            .performScrollTo()
+            .performClick()
+
+        assert(callbackInvoked) { "Expected onLearnAboutStrongLock to be invoked" }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Toddler-Proof Lock disclosure screen (AccessibilityDisclosureScreen)
+    //
+    // Play policy requires this be a dedicated screen describing what data is accessed, how it's
+    // used and shared, with an explicit affirmative action to proceed — back press or dismissal
+    // must never count as consent. Rendered directly (it's a public top-level composable, same
+    // treatment as HomeScreenContent) so these tests don't need a real HomeViewModel.
+    // ---------------------------------------------------------------------------
+
+    private fun setDisclosureContent(
+        onDecline: () -> Unit = {},
+        onContinueToSettings: () -> Unit = {},
+    ) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                AccessibilityDisclosureScreen(
+                    onDecline = onDecline,
+                    onContinueToSettings = onContinueToSettings,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun disclosureScreen_showsTitle() {
+        setDisclosureContent()
+
+        composeTestRule.onNodeWithText("Turn on Toddler-Proof Lock?").assertIsDisplayed()
+    }
+
+    @Test
+    fun disclosureScreen_showsWhatItDoesSection() {
+        setDisclosureContent()
+
+        composeTestRule.onNodeWithText("What Toddler-Proof Lock does").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Toddler-Proof Lock uses an Android Accessibility service to reinforce Touch Lock " +
+                "while it's active: it blocks taps on the navigation bar (Home, Back, Recents) " +
+                "and brings the protected app back to the front if it's navigated away from."
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun disclosureScreen_showsDataAccessSection() {
+        setDisclosureContent()
+
+        composeTestRule.onNodeWithText("What data it accesses").assertIsDisplayed()
+    }
+
+    @Test
+    fun disclosureScreen_showsSharingSection() {
+        setDisclosureContent()
+
+        composeTestRule.onNodeWithText("How it's used and shared").assertIsDisplayed()
+    }
+
+    @Test
+    fun disclosureScreen_declineButton_invokesOnDeclineOnly() {
+        var declineInvoked = false
+        var continueInvoked = false
+        setDisclosureContent(
+            onDecline = { declineInvoked = true },
+            onContinueToSettings = { continueInvoked = true },
+        )
+
+        composeTestRule.onNodeWithTag("disclosure_decline_button").performClick()
+
+        assert(declineInvoked) { "Expected onDecline to be invoked" }
+        assert(!continueInvoked) { "onContinueToSettings must never be invoked by declining" }
+    }
+
+    @Test
+    fun disclosureScreen_continueButton_invokesOnContinueToSettingsOnly() {
+        var declineInvoked = false
+        var continueInvoked = false
+        setDisclosureContent(
+            onDecline = { declineInvoked = true },
+            onContinueToSettings = { continueInvoked = true },
+        )
+
+        composeTestRule.onNodeWithTag("disclosure_continue_button").performClick()
+
+        assert(continueInvoked) { "Expected onContinueToSettings to be invoked" }
+        assert(!declineInvoked) { "onDecline must not be invoked by continuing" }
+    }
+
+    @Test
+    fun disclosureScreen_systemBackPress_invokesOnDeclineNeverOnContinueToSettings() {
+        var declineInvoked = false
+        var continueInvoked = false
+        setDisclosureContent(
+            onDecline = { declineInvoked = true },
+            onContinueToSettings = { continueInvoked = true },
+        )
+
+        Espresso.pressBack()
+
+        assert(declineInvoked) { "System back must decline, matching Play policy — it must never silently count as consent" }
+        assert(!continueInvoked) { "System back must never proceed to Settings" }
     }
 }

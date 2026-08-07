@@ -64,6 +64,9 @@ class LockOverlayServiceTest {
         override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
             backstopTimeoutFlow.value = minutes
         }
+
+        /** Test-only synchronous accessor, mirroring what a real collector would already hold. */
+        fun currentBackstopTimeoutMinutes(): Int = backstopTimeoutFlow.value
     }
 
     /**
@@ -83,13 +86,17 @@ class LockOverlayServiceTest {
         val overlayController: OverlayController = mockk(relaxed = true),
         val notificationManager: LockNotificationManager = mockk(relaxed = true),
         val permissionManager: OverlayPermissionManager = mockk(relaxed = true),
-        val configRepository: ConfigRepository = FakeConfigRepository(),
+        val configRepository: FakeConfigRepository = FakeConfigRepository(),
     ) {
         private var isServiceRunning = false
         private var isCountdownActive = false
         private var countdownSecondsRemaining = 0
         private var isBackstopTimeoutScheduled = false
+        private var wasAccessibilityConnected = false
         private val fakeNotification: Notification = mockk(relaxed = true)
+
+        var lastScheduledBackstopTimeoutMinutes: Int? = null
+            private set
 
         init {
             // Default: permission granted, notifications return dummy object
@@ -118,6 +125,7 @@ class LockOverlayServiceTest {
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
             isBackstopTimeoutScheduled = true
+            lastScheduledBackstopTimeoutMinutes = configRepository.currentBackstopTimeoutMinutes()
         }
 
         /** Mirrors LockOverlayService.stopLock() decision logic. */
@@ -147,6 +155,19 @@ class LockOverlayServiceTest {
         /** Simulates ACTION_SCREEN_OFF being received. */
         fun onScreenOff() {
             stopLock()
+        }
+
+        /**
+         * Mirrors initService()'s accessibilityServiceHolder.isConnected collector: re-attaches
+         * the overlay via the application-overlay fallback if the accessibility service
+         * disconnects while locked (its TYPE_ACCESSIBILITY_OVERLAY window is torn down with it).
+         */
+        fun onAccessibilityConnectionChanged(isConnected: Boolean) {
+            if (wasAccessibilityConnected && !isConnected && getLockState() == LockState.Locked) {
+                overlayController.hide()
+                overlayController.show(false) {}
+            }
+            wasAccessibilityConnected = isConnected
         }
 
         /** Mirrors LockOverlayService.startDelayedLock() decision logic. */
@@ -590,5 +611,77 @@ class LockOverlayServiceTest {
 
         verify(exactly = 0) { harness.overlayController.hide() }
         assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: backstop timeout uses the currently configured minutes (Task 3)
+    // ---------------------------------------------------------------------------
+
+    @org.junit.Test
+    fun `startLock schedules the backstop timeout using the currently configured minutes`() {
+        val harness = ServiceHarness(configRepository = FakeConfigRepository(initialBackstopTimeoutMinutes = 15))
+
+        harness.startLock()
+
+        assertThat(harness.lastScheduledBackstopTimeoutMinutes).isEqualTo(15)
+    }
+
+    @org.junit.Test
+    fun `backstop timeout is not hardcoded to the default when config differs`() {
+        val harness = ServiceHarness(configRepository = FakeConfigRepository(initialBackstopTimeoutMinutes = 120))
+
+        harness.startLock()
+
+        assertThat(harness.lastScheduledBackstopTimeoutMinutes).isNotEqualTo(60)
+        assertThat(harness.lastScheduledBackstopTimeoutMinutes).isEqualTo(120)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: mid-lock accessibility-disconnect recovery (Task 4)
+    // ---------------------------------------------------------------------------
+
+    @org.junit.Test
+    fun `accessibility service disconnecting while locked re-attaches the overlay`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.onAccessibilityConnectionChanged(isConnected = true)
+
+        harness.onAccessibilityConnectionChanged(isConnected = false)
+
+        verify { harness.overlayController.hide() }
+        verify(exactly = 2) { harness.overlayController.show(any(), any()) } // startLock() + recovery
+    }
+
+    @org.junit.Test
+    fun `accessibility service disconnecting while unlocked does not touch the overlay`() {
+        val harness = ServiceHarness()
+        harness.onAccessibilityConnectionChanged(isConnected = true)
+
+        harness.onAccessibilityConnectionChanged(isConnected = false)
+
+        verify(exactly = 0) { harness.overlayController.hide() }
+        verify(exactly = 0) { harness.overlayController.show(any(), any()) }
+    }
+
+    @org.junit.Test
+    fun `a disconnect with no prior connection while locked does not trigger recovery`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        // Never connected in the first place — guards the wasAccessibilityConnected=false case.
+        harness.onAccessibilityConnectionChanged(isConnected = false)
+
+        verify(exactly = 1) { harness.overlayController.show(any(), any()) } // startLock() only
+    }
+
+    @org.junit.Test
+    fun `the service connecting while locked does not trigger recovery`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.onAccessibilityConnectionChanged(isConnected = true)
+
+        verify(exactly = 0) { harness.overlayController.hide() }
+        verify(exactly = 1) { harness.overlayController.show(any(), any()) } // startLock() only
     }
 }

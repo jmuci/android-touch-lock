@@ -308,30 +308,42 @@ fun StrongLockUpsellCard(
     onLearnMoreClicked: () -> Unit
 ) {
     Surface(
-        shadowElevation = 2.dp,
+        shadowElevation = 6.dp,
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = MaterialTheme.colorScheme.primaryContainer,
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_lock_24),
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
             Text(
                 text = stringResource(R.string.strong_lock_upsell_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
                 text = stringResource(R.string.strong_lock_upsell_description),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-            OutlinedButton(onClick = onLearnMoreClicked) {
+            Button(
+                onClick = onLearnMoreClicked,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .testTag("strong_lock_upsell_learn_more_button")
+            ) {
                 Text(stringResource(R.string.strong_lock_upsell_learn_more))
             }
         }
@@ -339,7 +351,7 @@ fun StrongLockUpsellCard(
 }
 
 /**
- * Dedicated, standalone disclosure screen for the optional Strong Lock accessibility service.
+ * Dedicated, standalone disclosure screen for the optional Toddler-Proof Lock accessibility service.
  * Play policy requires: a dedicated screen with no unrelated content, a description of what data
  * is accessed, how it's used and shared, and an explicit affirmative action to proceed — back
  * press or tapping away must never count as consent or take the user to Settings.
@@ -365,9 +377,16 @@ fun AccessibilityDisclosureScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(12.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_lock_24),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = stringResource(R.string.strong_lock_disclosure_title),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center
             )
 
@@ -418,12 +437,15 @@ fun AccessibilityDisclosureScreen(
                 }
                 Button(
                     onClick = onContinueToSettings,
+                    contentPadding = ButtonDefaults.ContentPadding,
                     modifier = Modifier
                         .weight(1f)
+                        .height(52.dp)
                         .testTag("disclosure_continue_button")
                 ) {
                     Text(
                         text = stringResource(R.string.strong_lock_disclosure_continue),
+                        style = MaterialTheme.typography.titleMedium,
                         maxLines = 1
                     )
                 }
@@ -653,7 +675,7 @@ private fun HomeScreenNotificationsBlockedPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Strong Lock Upsell Card")
+@Preview(showBackground = true, name = "Toddler-Proof Lock Upsell Card")
 @Composable
 private fun StrongLockUpsellCardPreview() {
     MaterialTheme {
@@ -664,7 +686,7 @@ private fun StrongLockUpsellCardPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Strong Lock Disclosure")
+@Preview(showBackground = true, name = "Toddler-Proof Lock Disclosure")
 @Composable
 private fun AccessibilityDisclosureScreenPreview() {
     MaterialTheme {

@@ -252,6 +252,47 @@ class HomeViewModelTest {
         }
     }
 
+    @Test
+    fun `refreshPermissionState reflects accessibility being disabled after having been enabled`() = runTest {
+        every { accessibilityPermissionManager.isEnabled() } returns true
+        val freshViewModel = createViewModel()
+
+        freshViewModel.uiState.test {
+            // stateIn()'s synthetic TouchLockUiState() default (isAccessibilityEnabled=false) is
+            // always what a fresh StateFlow subscriber sees first, before the real combine() has
+            // had a chance to run — the first *real* computed state is the item after this one.
+            awaitItem()
+            assertThat(awaitItem().isAccessibilityEnabled).isTrue()
+
+            every { accessibilityPermissionManager.isEnabled() } returns false
+            freshViewModel.refreshPermissionState()
+            advanceUntilIdle()
+
+            assertThat(awaitItem().isAccessibilityEnabled).isFalse()
+        }
+    }
+
+    @Test
+    fun `refreshPermissionState reflects all three permission flows changing simultaneously`() = runTest {
+        viewModel.uiState.test {
+            val initial = awaitItem()
+            assertThat(initial.hasOverlayPermission).isFalse()
+            assertThat(initial.areNotificationsAvailable).isFalse()
+            assertThat(initial.isAccessibilityEnabled).isFalse()
+
+            every { overlayPermissionManager.hasPermission() } returns true
+            every { notificationPermissionManager.areNotificationsAvailable() } returns true
+            every { accessibilityPermissionManager.isEnabled() } returns true
+            viewModel.refreshPermissionState()
+            advanceUntilIdle()
+
+            val updated = awaitItem()
+            assertThat(updated.hasOverlayPermission).isTrue()
+            assertThat(updated.areNotificationsAvailable).isTrue()
+            assertThat(updated.isAccessibilityEnabled).isTrue()
+        }
+    }
+
     // Helper function to create a fresh ViewModel with current fake dependencies
     private fun createViewModel() = HomeViewModel(
         lockRepository = lockRepository,

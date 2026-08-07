@@ -30,11 +30,38 @@ class SnapBackDecisionLogicTest {
         /** Test-controlled clock, standing in for SystemClock.elapsedRealtime(). */
         var currentElapsedMillis = 0L
 
+        /**
+         * Mirrors [TouchLockAccessibilityService.lastKnownForegroundPackage] — continuously
+         * updated from every window-state event regardless of lock state, filtered through
+         * [isEligibleProtectedCandidate] (`onAccessibilityEvent()`'s unconditional capture, not
+         * the reconnect-race adoption below).
+         */
+        var lastKnownForegroundPackage: String? = null
+            private set
+
         /** Mirrors dismissShade()'s grace-window bookkeeping. */
         fun dismissShade() {
             suppressSnapBackUntilElapsedMillis =
                 currentElapsedMillis + SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS
         }
+
+        /**
+         * Mirrors the unconditional `lastKnownForegroundPackage = eventPackage` capture at the
+         * top of onAccessibilityEvent(), which runs for every window-state event regardless of
+         * lock state.
+         */
+        fun observeWindowState(packageName: String?) {
+            if (isEligibleProtectedCandidate(packageName)) {
+                lastKnownForegroundPackage = packageName
+            }
+        }
+
+        /**
+         * Locks using whatever [observeWindowState] has captured so far, mirroring
+         * onServiceConnected()'s real capture source — rather than a caller-supplied override.
+         */
+        fun lockUsingObservedForegroundPackage() =
+            setLocked(locked = true, knownForegroundPackage = lastKnownForegroundPackage)
 
         fun setLocked(locked: Boolean, knownForegroundPackage: String? = "com.protected.app") {
             if (locked && protectedPackageName == null) {
@@ -254,6 +281,53 @@ class SnapBackDecisionLogicTest {
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.real.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
+    }
+
+    // --- SystemUI must never poison the lock-engagement capture either (the primary bug
+    // scenario from the Codex review: locking right after pulling the shade from the persistent
+    // notification, via onServiceConnected()'s lastKnownForegroundPackage-based capture — distinct
+    // from the reconnect-race adoption path covered above). ---
+
+    @Test
+    fun `pulling the shade right before locking does not poison the protected package`() {
+        val harness = Harness(isLocked = false)
+        harness.observeWindowState("com.real.app")
+        harness.observeWindowState(Harness.SYSTEM_UI_PACKAGE) // shade opened right before lock
+
+        harness.lockUsingObservedForegroundPackage()
+
+        assertThat(harness.protectedPackageName).isEqualTo("com.real.app")
+    }
+
+    @Test
+    fun `SystemUI alone observed before locking leaves no protected package captured`() {
+        val harness = Harness(isLocked = false)
+        harness.observeWindowState(Harness.SYSTEM_UI_PACKAGE)
+
+        harness.lockUsingObservedForegroundPackage()
+
+        assertThat(harness.protectedPackageName).isNull()
+    }
+
+    @Test
+    fun `allowlisted package observed before locking is never captured as the protected package`() {
+        val harness = Harness(allowlisted = setOf("com.android.settings"), isLocked = false)
+        harness.observeWindowState("com.real.app")
+        harness.observeWindowState("com.android.settings")
+
+        harness.lockUsingObservedForegroundPackage()
+
+        assertThat(harness.protectedPackageName).isEqualTo("com.real.app")
+    }
+
+    @Test
+    fun `a normal foreground app observed before locking is correctly captured as the protected package`() {
+        val harness = Harness(isLocked = false)
+        harness.observeWindowState("com.real.app")
+
+        harness.lockUsingObservedForegroundPackage()
+
+        assertThat(harness.protectedPackageName).isEqualTo("com.real.app")
     }
 
     // --- Self-action grace window: dismissShade()'s own side effects must never trigger snap-back ---

@@ -63,6 +63,24 @@ class AccessibilityPermissionManagerTest {
         assertThat(manager.isEnabled()).isTrue()
     }
 
+    // --- createSettingsIntent ---
+    //
+    // Intent's getAction()/getFlags() are themselves stubbed methods under
+    // unitTests.isReturnDefaultValues = true (they return null/0 regardless of what the
+    // constructor/addFlags() set), so the exact action string and flag bit can't be asserted in
+    // this pure JVM environment — same class of limitation as OverlayControllerTest's dpToPx.
+    // This only verifies the call is wired up and doesn't crash; the actual action/flag values
+    // need on-device or instrumented verification.
+
+    @Test
+    fun `createSettingsIntent does not crash and returns an Intent`() {
+        val manager = managerWith(emptyList())
+
+        val intent = manager.createSettingsIntent()
+
+        assertThat(intent).isNotNull()
+    }
+
     companion object {
         private const val OUR_PACKAGE = "com.tenmilelabs.touchlock"
         private val OUR_SERVICE_CLASS = TouchLockAccessibilityService::class.java.name
