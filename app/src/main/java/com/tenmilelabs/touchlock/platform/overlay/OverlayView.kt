@@ -6,21 +6,20 @@ import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
-import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import timber.log.Timber
-import kotlin.math.abs
 
 /**
  * Full-screen overlay that blocks all touch input.
- * Detects double-tap to show unlock handle.
- * Detects long-press for direct unlock (legacy).
- * 
+ * Detects double-tap to show the unlock handle, which then requires its own press-and-hold to
+ * actually unlock. Deliberately the *only* gesture this view acts on: a plain press-and-hold here
+ * used to unlock directly, which a resting finger triggers by accident and which defeats the whole
+ * point of the lock for the supervised-toddler case this app targets.
+ *
  * @param debugTintVisible Debug-only: When true, applies a visible tint to confirm overlay is attached
  */
 class OverlayView(
     context: Context,
-    private val onUnlockRequested: () -> Unit,
     private val onDoubleTapDetected: () -> Unit,
     debugTintVisible: Boolean = false
 ) : FrameLayout(context) {
@@ -28,24 +27,15 @@ class OverlayView(
     // Handler is used intentionally here instead of coroutines. This View is attached to
     // WindowManager as a system overlay, outside any Activity/Fragment lifecycle. No
     // LifecycleOwner is available and this view is short lived, so lifecycle-scoped coroutines cannot be used. Creating
-    // a manual CoroutineScope for simple touch-gesture timing (long-press, double-tap)
+    // a manual CoroutineScope for simple touch-gesture timing (double-tap)
     // would add complexity without benefit over the standard Android View Handler pattern.
     // The events are touch-event-bound, all in the main thread and tighly inteterleaved
     // with the event callbacks, so handler makes sense.
     private val handler = Handler(Looper.getMainLooper())
-    private var longPressTriggered = false
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
-    private var downX = 0f
-    private var downY = 0f
 
     // Double-tap detection
     private var lastTapTime = 0L
     private var tapCount = 0
-
-    private val longPressRunnable = Runnable {
-        longPressTriggered = true
-        onUnlockRequested()
-    }
 
     private val doubleTapResetRunnable = Runnable {
         tapCount = 0
@@ -67,11 +57,6 @@ class OverlayView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                longPressTriggered = false
-                downX = event.rawX
-                downY = event.rawY
-                handler.postDelayed(longPressRunnable, LONG_PRESS_DURATION_MS)
-
                 // Detect double-tap
                 val currentTime = System.currentTimeMillis()
                 val timeSinceLastTap = currentTime - lastTapTime
@@ -82,7 +67,6 @@ class OverlayView(
                     if (tapCount >= 2) {
                         // Double-tap detected!
                         handler.removeCallbacks(doubleTapResetRunnable)
-                        handler.removeCallbacks(longPressRunnable)
                         tapCount = 0
                         onDoubleTapDetected()
                     }
@@ -95,22 +79,9 @@ class OverlayView(
                 handler.postDelayed(doubleTapResetRunnable, DOUBLE_TAP_TIMEOUT_MS)
             }
 
-            MotionEvent.ACTION_MOVE -> {
-                // A drag (e.g. pulling the notification shade, which on some OEMs can be started
-                // from anywhere on screen, not just the status bar) must not be misread as a held
-                // long-press. Cancel the long-press timer once the finger moves past touch slop,
-                // same disambiguation Android views use elsewhere between a tap/hold and a drag.
-                val dx = abs(event.rawX - downX)
-                val dy = abs(event.rawY - downY)
-                if (dx > touchSlop || dy > touchSlop) {
-                    handler.removeCallbacks(longPressRunnable)
-                }
-            }
-
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
                 Timber.d("OverlayView.onTouchEvent ${if (event.actionMasked == MotionEvent.ACTION_UP) "ACTION_UP" else "ACTION_CANCEL"}")
-                handler.removeCallbacks(longPressRunnable)
             }
         }
         return true // Always consume touch
@@ -118,12 +89,10 @@ class OverlayView(
 
     fun cleanup() {
         Timber.d("OverlayView.cleanup() called")
-        handler.removeCallbacks(longPressRunnable)
         handler.removeCallbacks(doubleTapResetRunnable)
     }
 
     companion object {
-        private const val LONG_PRESS_DURATION_MS = 1500L
         private const val DOUBLE_TAP_TIMEOUT_MS = 400L
     }
 }

@@ -88,7 +88,6 @@ class OverlayController @Inject constructor(
 
         val view = OverlayView(
             context = context,
-            onUnlockRequested = onUnlockRequested,
             onDoubleTapDetected = {
                 showUnlockHandle(onUnlockRequested)
             },

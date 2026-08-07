@@ -37,8 +37,17 @@ class TouchLockAccessibilityService : AccessibilityService() {
     private var dismissShadeJob: Job? = null
 
     // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
-    // package in the foreground at the moment the lock engages is known.
+    // package in the foreground at the moment the lock engages is known. Deliberately filtered:
+    // only packages eligible to *be* the protected app land here. Do not read it to answer "what
+    // is in front right now" — use [currentForegroundPackage] for that.
     private var lastKnownForegroundPackage: String? = null
+
+    // Every package seen in a window-state event, unfiltered — including SystemUI and allowlisted
+    // packages. [lastKnownForegroundPackage] excludes allowlisted packages by construction, so
+    // checking the allowlist against it can never match; suppression decisions that need to know
+    // whether an allowlisted surface (Settings, dialer, emergency alert) is actually in front must
+    // read this instead, or the allowlist escape hatch silently does nothing.
+    private var currentForegroundPackage: String? = null
 
     // Captured when the lock engages; cleared when it releases. Null means "no active lock
     // session" and is itself part of the fail-open guard below.
@@ -76,6 +85,10 @@ class TouchLockAccessibilityService : AccessibilityService() {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val eventPackage = e.packageName?.toString()
+        if (eventPackage != null) {
+            currentForegroundPackage = eventPackage
+        }
+
         // SystemUI (the shade) and allowlisted packages (Settings, dialer, clock, emergency
         // alerts) are transient system surfaces, not an app the user is actually using — never
         // let one overwrite the last real foreground app. Otherwise locking right after pulling
@@ -207,7 +220,9 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // Fail-open: anything other than Locked — including unknown/unreachable — consumes
         // nothing.
         if (LockOverlayService.lockState.value != LockState.Locked) return false
-        if (allowlist.isAllowlisted(lastKnownForegroundPackage)) return false
+        // Must be the unfiltered package: an allowlisted surface (Settings, dialer, emergency
+        // alert) in front means BACK stays functional so the user is never trapped in it.
+        if (allowlist.isAllowlisted(currentForegroundPackage)) return false
 
         return event.keyCode == KeyEvent.KEYCODE_BACK
     }
@@ -238,10 +253,21 @@ class TouchLockAccessibilityService : AccessibilityService() {
     }
 
     private fun triggerForceUnlock() {
+        // Nothing to release when already unlocked, and starting a *stopped* service from the
+        // background throws IllegalStateException — which would crash this accessibility service
+        // and make the system disable it. Reachable in practice: the volume combo is fed to
+        // [handleVolumeCombo] before the lock-state check in onKeyEvent, so it fires even with the
+        // lock off and LockOverlayService dismissed.
+        if (LockOverlayService.lockState.value != LockState.Locked) return
+
         val intent = Intent(this, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_FORCE_UNLOCK
         }
-        startService(intent)
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to start LockOverlayService for force unlock")
+        }
     }
 
     override fun onInterrupt() {

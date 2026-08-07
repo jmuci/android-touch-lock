@@ -39,6 +39,15 @@ class SnapBackDecisionLogicTest {
         var lastKnownForegroundPackage: String? = null
             private set
 
+        /**
+         * Mirrors [TouchLockAccessibilityService.currentForegroundPackage] — the *unfiltered*
+         * package from every window-state event, including SystemUI and allowlisted packages.
+         * This is what suppression decisions must consult; [lastKnownForegroundPackage] answers
+         * the different question of "what may be captured as the protected app".
+         */
+        var currentForegroundPackage: String? = null
+            private set
+
         /** Mirrors dismissShade()'s grace-window bookkeeping. */
         fun dismissShade() {
             suppressSnapBackUntilElapsedMillis =
@@ -51,6 +60,9 @@ class SnapBackDecisionLogicTest {
          * lock state.
          */
         fun observeWindowState(packageName: String?) {
+            if (packageName != null) {
+                currentForegroundPackage = packageName
+            }
             if (isEligibleProtectedCandidate(packageName)) {
                 lastKnownForegroundPackage = packageName
             }
@@ -82,6 +94,9 @@ class SnapBackDecisionLogicTest {
 
         /** Mirrors onAccessibilityEvent()'s decision logic for a TYPE_WINDOW_STATE_CHANGED event. */
         fun onWindowStateChanged(eventPackage: String) {
+            // Mirrors the unfiltered capture at the very top of onAccessibilityEvent(), which
+            // runs before the lock-state check.
+            currentForegroundPackage = eventPackage
             if (!isLocked) return
             // Edge case fix: adopt the first eligible package observed while locked if the
             // lock-engagement capture raced and came up null, instead of leaving snap-back
@@ -100,9 +115,19 @@ class SnapBackDecisionLogicTest {
             }
         }
 
-        /** Mirrors onKeyEvent()'s BACK-consumption decision logic. */
-        fun consumesBack(foregroundPackage: String?): Boolean {
+        /**
+         * Mirrors onKeyEvent()'s BACK-consumption decision logic.
+         *
+         * Reads [currentForegroundPackage] rather than taking the package as a parameter, on
+         * purpose: this test previously passed a package in directly, so it asserted the
+         * *intended* logic while production read `lastKnownForegroundPackage` — which excludes
+         * allowlisted packages by construction, making the allowlist check dead code and BACK
+         * consumed even in Settings. Deriving the package from observed events is what makes that
+         * class of mismatch visible here.
+         */
+        fun consumesBack(): Boolean {
             if (!isLocked) return false
+            val foregroundPackage = currentForegroundPackage
             if (foregroundPackage != null && foregroundPackage in allowlisted) return false
             return true
         }
@@ -136,13 +161,15 @@ class SnapBackDecisionLogicTest {
     @Test
     fun `does not consume BACK when unlocked`() {
         val harness = Harness(isLocked = false)
-        assertThat(harness.consumesBack("com.other.app")).isFalse()
+        harness.observeWindowState("com.other.app")
+        assertThat(harness.consumesBack()).isFalse()
     }
 
     @Test
     fun `consumes BACK while locked`() {
         val harness = Harness(isLocked = true)
-        assertThat(harness.consumesBack("com.protected.app")).isTrue()
+        harness.observeWindowState("com.protected.app")
+        assertThat(harness.consumesBack()).isTrue()
     }
 
     // --- Allowlist ---
@@ -160,7 +187,24 @@ class SnapBackDecisionLogicTest {
     @Test
     fun `does not consume BACK while an allowlisted package is foreground`() {
         val harness = Harness(allowlisted = setOf("com.android.settings"), isLocked = true)
-        assertThat(harness.consumesBack("com.android.settings")).isFalse()
+
+        // Must arrive as an observed window-state event, not a direct parameter: an allowlisted
+        // package never lands in lastKnownForegroundPackage, so reading that field here is exactly
+        // the bug this asserts against.
+        harness.observeWindowState("com.android.settings")
+
+        assertThat(harness.consumesBack()).isFalse()
+        assertThat(harness.lastKnownForegroundPackage).isNull()
+    }
+
+    @Test
+    fun `consumes BACK again once a non-allowlisted app returns to the foreground`() {
+        val harness = Harness(allowlisted = setOf("com.android.settings"), isLocked = true)
+
+        harness.observeWindowState("com.android.settings")
+        harness.observeWindowState("com.protected.app")
+
+        assertThat(harness.consumesBack()).isTrue()
     }
 
     // --- Snap-back on package change ---

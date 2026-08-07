@@ -4,6 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
@@ -12,6 +17,7 @@ import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.service.LockOverlayService
 import com.tenmilelabs.touchlock.ui.screens.home.HomeScreen
 import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
+import com.tenmilelabs.touchlock.ui.theme.TouchLockTheme
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import javax.inject.Inject
@@ -31,26 +37,40 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Timber.d("MainActivity.onCreate() called")
+        // targetSdk 35+ draws edge-to-edge whether or not we opt in, so opt in explicitly: this is
+        // what picks light/dark system bar icons to contrast with the content behind them.
+        // Composables inset themselves via safeDrawingPadding().
+        enableEdgeToEdge()
         startLockService()
 
         setContent {
             val viewModel: HomeViewModel = hiltViewModel()
 
-            HomeScreen(
-                viewModel = viewModel,
-                onRequestOverlayPermission = {
-                    Timber.d("onRequestOverlayPermission clicked, starting settings")
-                    startActivity(overlayPermissionManager.createSettingsIntent())
-                },
-                onRequestNotificationPermission = {
-                    Timber.d("onRequestNotificationPermission clicked, starting settings")
-                    startActivity(notificationPermissionManager.createNotificationSettingsIntent())
-                },
-                onRequestAccessibilityPermission = {
-                    Timber.d("onRequestAccessibilityPermission clicked, starting settings")
-                    startActivity(accessibilityPermissionManager.createSettingsIntent())
+            // Surface supplies the themed background colour. Without it the content draws straight
+            // onto the window background, which is light in every configuration, so dark-mode text
+            // would be light-on-light.
+            TouchLockTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    HomeScreen(
+                        viewModel = viewModel,
+                        onRequestOverlayPermission = {
+                            Timber.d("onRequestOverlayPermission clicked, starting settings")
+                            startActivity(overlayPermissionManager.createSettingsIntent())
+                        },
+                        onRequestNotificationPermission = {
+                            Timber.d("onRequestNotificationPermission clicked, starting settings")
+                            startActivity(notificationPermissionManager.createNotificationSettingsIntent())
+                        },
+                        onRequestAccessibilityPermission = {
+                            Timber.d("onRequestAccessibilityPermission clicked, starting settings")
+                            startActivity(accessibilityPermissionManager.createSettingsIntent())
+                        }
+                    )
                 }
-            )
+            }
         }
     }
 
