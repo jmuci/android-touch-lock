@@ -18,8 +18,11 @@ class SnapBackDecisionLogicTest {
     ) {
         var protectedPackageName: String? = null
             private set
-        var snapBackCount = 0
-            private set
+
+        /** Mirrors [TouchLockAccessibilityService.snapBackTimestamps]. */
+        private val snapBackTimestamps = ArrayDeque<Long>()
+        val snapBackCount: Int
+            get() = snapBackTimestamps.size
         var forceUnlockTriggered = false
             private set
         var lastRelaunchedPackage: String? = null
@@ -39,6 +42,15 @@ class SnapBackDecisionLogicTest {
         var lastKnownForegroundPackage: String? = null
             private set
 
+        /**
+         * Mirrors [TouchLockAccessibilityService.currentForegroundPackage] — the *unfiltered*
+         * package from every window-state event, including SystemUI and allowlisted packages.
+         * This is what suppression decisions must consult; [lastKnownForegroundPackage] answers
+         * the different question of "what may be captured as the protected app".
+         */
+        var currentForegroundPackage: String? = null
+            private set
+
         /** Mirrors dismissShade()'s grace-window bookkeeping. */
         fun dismissShade() {
             suppressSnapBackUntilElapsedMillis =
@@ -51,6 +63,9 @@ class SnapBackDecisionLogicTest {
          * lock state.
          */
         fun observeWindowState(packageName: String?) {
+            if (packageName != null) {
+                currentForegroundPackage = packageName
+            }
             if (isEligibleProtectedCandidate(packageName)) {
                 lastKnownForegroundPackage = packageName
             }
@@ -68,7 +83,7 @@ class SnapBackDecisionLogicTest {
                 // Mirrors onServiceConnected()'s capture: uses whatever was last observed, which
                 // can be null if the service (re)connected right as the lock engaged.
                 protectedPackageName = knownForegroundPackage
-                snapBackCount = 0
+                snapBackTimestamps.clear()
             } else if (!locked) {
                 protectedPackageName = null
             }
@@ -82,6 +97,9 @@ class SnapBackDecisionLogicTest {
 
         /** Mirrors onAccessibilityEvent()'s decision logic for a TYPE_WINDOW_STATE_CHANGED event. */
         fun onWindowStateChanged(eventPackage: String) {
+            // Mirrors the unfiltered capture at the very top of onAccessibilityEvent(), which
+            // runs before the lock-state check.
+            currentForegroundPackage = eventPackage
             if (!isLocked) return
             // Edge case fix: adopt the first eligible package observed while locked if the
             // lock-engagement capture raced and came up null, instead of leaving snap-back
@@ -100,16 +118,33 @@ class SnapBackDecisionLogicTest {
             }
         }
 
-        /** Mirrors onKeyEvent()'s BACK-consumption decision logic. */
-        fun consumesBack(foregroundPackage: String?): Boolean {
+        /**
+         * Mirrors onKeyEvent()'s BACK-consumption decision logic.
+         *
+         * Reads [currentForegroundPackage] rather than taking the package as a parameter, on
+         * purpose: this test previously passed a package in directly, so it asserted the
+         * *intended* logic while production read `lastKnownForegroundPackage` — which excludes
+         * allowlisted packages by construction, making the allowlist check dead code and BACK
+         * consumed even in Settings. Deriving the package from observed events is what makes that
+         * class of mismatch visible here.
+         */
+        fun consumesBack(): Boolean {
             if (!isLocked) return false
+            val foregroundPackage = currentForegroundPackage
             if (foregroundPackage != null && foregroundPackage in allowlisted) return false
             return true
         }
 
+        /** Mirrors [TouchLockAccessibilityService.performSnapBack]'s rolling-window rate limit. */
         private fun performSnapBack(protected: String) {
-            snapBackCount++
-            if (snapBackCount > MAX_SNAP_BACK_ATTEMPTS) {
+            snapBackTimestamps.addLast(currentElapsedMillis)
+            while (snapBackTimestamps.isNotEmpty() &&
+                currentElapsedMillis - snapBackTimestamps.first() > SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+            ) {
+                snapBackTimestamps.removeFirst()
+            }
+
+            if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
                 forceUnlockTriggered = true
                 return
             }
@@ -118,6 +153,7 @@ class SnapBackDecisionLogicTest {
 
         companion object {
             private const val MAX_SNAP_BACK_ATTEMPTS = 3
+            const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L
             private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
             const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         }
@@ -136,13 +172,15 @@ class SnapBackDecisionLogicTest {
     @Test
     fun `does not consume BACK when unlocked`() {
         val harness = Harness(isLocked = false)
-        assertThat(harness.consumesBack("com.other.app")).isFalse()
+        harness.observeWindowState("com.other.app")
+        assertThat(harness.consumesBack()).isFalse()
     }
 
     @Test
     fun `consumes BACK while locked`() {
         val harness = Harness(isLocked = true)
-        assertThat(harness.consumesBack("com.protected.app")).isTrue()
+        harness.observeWindowState("com.protected.app")
+        assertThat(harness.consumesBack()).isTrue()
     }
 
     // --- Allowlist ---
@@ -160,7 +198,24 @@ class SnapBackDecisionLogicTest {
     @Test
     fun `does not consume BACK while an allowlisted package is foreground`() {
         val harness = Harness(allowlisted = setOf("com.android.settings"), isLocked = true)
-        assertThat(harness.consumesBack("com.android.settings")).isFalse()
+
+        // Must arrive as an observed window-state event, not a direct parameter: an allowlisted
+        // package never lands in lastKnownForegroundPackage, so reading that field here is exactly
+        // the bug this asserts against.
+        harness.observeWindowState("com.android.settings")
+
+        assertThat(harness.consumesBack()).isFalse()
+        assertThat(harness.lastKnownForegroundPackage).isNull()
+    }
+
+    @Test
+    fun `consumes BACK again once a non-allowlisted app returns to the foreground`() {
+        val harness = Harness(allowlisted = setOf("com.android.settings"), isLocked = true)
+
+        harness.observeWindowState("com.android.settings")
+        harness.observeWindowState("com.protected.app")
+
+        assertThat(harness.consumesBack()).isTrue()
     }
 
     // --- Snap-back on package change ---
@@ -208,6 +263,69 @@ class SnapBackDecisionLogicTest {
         repeat(4) { harness.onWindowStateChanged("com.launcher") }
 
         assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    // --- Rate limiting: rolling window, not a flat per-session cap ---
+    //
+    // Confirmed on-device (emulator, gesture navigation — the modern default): a flat per-session
+    // cap defeats itself under completely normal use. Four genuine, isolated swipe-home gestures
+    // roughly 10-15s apart — not rapid-fire, not an attempt to defeat the lock — exhausted a flat
+    // counter and silently released Strong Lock. A rolling window fixes that: only a real, rapid
+    // fight against the lock still trips the safety release.
+
+    @Test
+    fun `snap-backs spread beyond the rate-limit window never accumulate toward the release threshold`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        repeat(5) {
+            harness.onWindowStateChanged("com.launcher")
+            harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS + 1
+        }
+
+        assertThat(harness.forceUnlockTriggered).isFalse()
+    }
+
+    @Test
+    fun `4 snap-backs packed inside the rate-limit window still releases the lock`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        repeat(4) {
+            harness.onWindowStateChanged("com.launcher")
+            harness.currentElapsedMillis += 100L // rapid, well within the window
+        }
+
+        assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    @Test
+    fun `an attempt exactly at the window boundary still counts toward the limit`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 at t=0
+
+        // Exactly the window width, not past it — pruning requires strictly *greater than* the
+        // window (see performSnapBack's `now - snapBackTimestamps.first() > ...`), so the first
+        // attempt is still in-window here and this is the 4th surviving entry, not a fresh 1st.
+        harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+        harness.onWindowStateChanged("com.launcher")
+
+        assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    @Test
+    fun `attempts older than the window drop out of the count`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 packed at t=0
+        assertThat(harness.snapBackCount).isEqualTo(3)
+
+        harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS + 1
+        harness.onWindowStateChanged("com.launcher") // 1 more, long after the first 3 aged out
+
+        assertThat(harness.snapBackCount).isEqualTo(1)
+        assertThat(harness.forceUnlockTriggered).isFalse()
     }
 
     @Test
@@ -374,5 +492,24 @@ class SnapBackDecisionLogicTest {
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.protected.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `shade dismissals never consume from the snap-back rate-limit budget, even interleaved with real snap-backs`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        // 3 real snap-backs, each preceded by a shade dismissal that must not itself count —
+        // these are two independent mechanisms (dismissShade's grace window vs performSnapBack's
+        // rate-limit window) and a dismissal returns before ever reaching performSnapBack, so it
+        // must never inflate snapBackCount.
+        repeat(3) {
+            harness.dismissShade()
+            harness.currentElapsedMillis += 1600L // past the 1500ms shade-dismiss grace window
+            harness.onWindowStateChanged("com.launcher")
+        }
+
+        assertThat(harness.snapBackCount).isEqualTo(3)
+        assertThat(harness.forceUnlockTriggered).isFalse()
     }
 }

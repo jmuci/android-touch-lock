@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Dark counterpart of the base theme. Only the window background matters here: Compose draws
+         its own themed Surface on top, but the window background is what's visible during the cold
+         start before the first frame, and the light parent flashes white in dark mode. -->
+    <style name="Theme.TouchLock" parent="android:Theme.Material.NoActionBar" />
+
+</resources>

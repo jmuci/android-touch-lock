@@ -123,5 +123,6 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.hilt.android.testing)
+    testImplementation(libs.robolectric)
     kspTest(libs.hilt.android.compiler)
 }

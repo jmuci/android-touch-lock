@@ -37,13 +37,30 @@ class TouchLockAccessibilityService : AccessibilityService() {
     private var dismissShadeJob: Job? = null
 
     // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
-    // package in the foreground at the moment the lock engages is known.
+    // package in the foreground at the moment the lock engages is known. Deliberately filtered:
+    // only packages eligible to *be* the protected app land here. Do not read it to answer "what
+    // is in front right now" — use [currentForegroundPackage] for that.
     private var lastKnownForegroundPackage: String? = null
+
+    // Every package seen in a window-state event, unfiltered — including SystemUI and allowlisted
+    // packages. [lastKnownForegroundPackage] excludes allowlisted packages by construction, so
+    // checking the allowlist against it can never match; suppression decisions that need to know
+    // whether an allowlisted surface (Settings, dialer, emergency alert) is actually in front must
+    // read this instead, or the allowlist escape hatch silently does nothing.
+    private var currentForegroundPackage: String? = null
 
     // Captured when the lock engages; cleared when it releases. Null means "no active lock
     // session" and is itself part of the fail-open guard below.
     private var protectedPackageName: String? = null
-    private var snapBackCount = 0
+
+    // Timestamps (elapsedRealtime) of recent snap-back relaunches, oldest first. Confirmed
+    // on-device that a flat per-session cap defeats itself under completely normal use: on
+    // gesture-navigation devices (the modern default), 3-4 unrelated swipe-home gestures spread
+    // over the course of watching a video exhaust a per-session counter and silently disable
+    // Strong Lock with no warning. Rate-limiting within a rolling window instead means isolated,
+    // spaced-out navigation attempts never accumulate, while a rapid real fight against the lock
+    // still trips the release — see [performSnapBack].
+    private val snapBackTimestamps = ArrayDeque<Long>()
 
     // Set whenever we dispatch a global action of our own (e.g. dismissing the shade). Confirmed
     // on-device that this can itself generate a window-state-changed event that gets misread as
@@ -62,7 +79,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
             LockOverlayService.lockState.collect { state ->
                 if (state == LockState.Locked && protectedPackageName == null) {
                     protectedPackageName = lastKnownForegroundPackage
-                    snapBackCount = 0
+                    snapBackTimestamps.clear()
                     Timber.d("Lock engaged, protecting package: $protectedPackageName")
                 } else if (state != LockState.Locked) {
                     protectedPackageName = null
@@ -76,6 +93,10 @@ class TouchLockAccessibilityService : AccessibilityService() {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val eventPackage = e.packageName?.toString()
+        if (eventPackage != null) {
+            currentForegroundPackage = eventPackage
+        }
+
         // SystemUI (the shade) and allowlisted packages (Settings, dialer, clock, emergency
         // alerts) are transient system surfaces, not an app the user is actually using — never
         // let one overwrite the last real foreground app. Otherwise locking right after pulling
@@ -175,15 +196,28 @@ class TouchLockAccessibilityService : AccessibilityService() {
 
     /**
      * Relaunches the protected package after the user navigates away while locked. Rate-limited
-     * to [MAX_SNAP_BACK_ATTEMPTS] per lock session — beyond that, a fight with the launcher
-     * self-terminates by releasing the lock instead of looping.
+     * to [MAX_SNAP_BACK_ATTEMPTS] within a rolling [SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS] window —
+     * not a flat per-session cap, which confirmed on-device to defeat itself: a handful of
+     * unrelated swipe-home gestures spread across a whole video session would exhaust it and
+     * silently disable Strong Lock. Windowing means only a genuine rapid fight with the launcher
+     * self-terminates by releasing the lock instead of looping; isolated attempts age out and
+     * never accumulate.
      */
     private fun performSnapBack(protectedPackage: String) {
-        snapBackCount++
-        Timber.d("Snap-back #$snapBackCount to $protectedPackage")
+        val now = SystemClock.elapsedRealtime()
+        snapBackTimestamps.addLast(now)
+        while (snapBackTimestamps.isNotEmpty() &&
+            now - snapBackTimestamps.first() > SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+        ) {
+            snapBackTimestamps.removeFirst()
+        }
+        Timber.d(
+            "Snap-back (${snapBackTimestamps.size} within the last " +
+                "${SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS}ms) to $protectedPackage"
+        )
 
-        if (snapBackCount > MAX_SNAP_BACK_ATTEMPTS) {
-            Timber.w("Snap-back limit reached, auto-releasing lock")
+        if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
+            Timber.w("Snap-back limit reached within the rate-limit window, auto-releasing lock")
             triggerForceUnlock()
             return
         }
@@ -207,7 +241,9 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // Fail-open: anything other than Locked — including unknown/unreachable — consumes
         // nothing.
         if (LockOverlayService.lockState.value != LockState.Locked) return false
-        if (allowlist.isAllowlisted(lastKnownForegroundPackage)) return false
+        // Must be the unfiltered package: an allowlisted surface (Settings, dialer, emergency
+        // alert) in front means BACK stays functional so the user is never trapped in it.
+        if (allowlist.isAllowlisted(currentForegroundPackage)) return false
 
         return event.keyCode == KeyEvent.KEYCODE_BACK
     }
@@ -238,10 +274,21 @@ class TouchLockAccessibilityService : AccessibilityService() {
     }
 
     private fun triggerForceUnlock() {
+        // Nothing to release when already unlocked, and starting a *stopped* service from the
+        // background throws IllegalStateException — which would crash this accessibility service
+        // and make the system disable it. Reachable in practice: the volume combo is fed to
+        // [handleVolumeCombo] before the lock-state check in onKeyEvent, so it fires even with the
+        // lock off and LockOverlayService dismissed.
+        if (LockOverlayService.lockState.value != LockState.Locked) return
+
         val intent = Intent(this, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_FORCE_UNLOCK
         }
-        startService(intent)
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to start LockOverlayService for force unlock")
+        }
     }
 
     override fun onInterrupt() {
@@ -267,6 +314,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
     companion object {
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
+        private const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L
         private const val SHADE_DISMISS_DEBOUNCE_MILLIS = 1000L
         private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
     }

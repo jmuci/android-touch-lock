@@ -1,11 +1,18 @@
 package com.tenmilelabs.touchlock.platform.overlay
 
 import android.annotation.SuppressLint
+import android.content.ComponentCallbacks
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.graphics.Point
+import android.graphics.Rect
+import android.os.Build
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.Surface
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
 import com.tenmilelabs.touchlock.platform.accessibility.AccessibilityServiceHolder
@@ -40,19 +47,18 @@ class OverlayController @Inject constructor(
     internal fun dpToPx(dp: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, displayMetrics).toInt()
 
-    /**
-     * Status bar height in px, used to inset accessibility-overlay windows so the status bar and
-     * its privacy/camera/mic/cast indicators are never covered. Resource lookup rather than
-     * WindowInsets.Type.statusBars() so it works uniformly from minSdk 26.
-     */
-    @VisibleForTesting
-    internal fun statusBarHeightPx(): Int {
-        val resourceId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
-        return if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
-    }
-
     private var overlayView: OverlayView? = null
     private var overlayWindowManager: WindowManager? = null
+    private var overlayWindowType: Int? = null
+
+    // Recomputes and reapplies the overlay's bounds on every configuration change while it's
+    // attached. Necessary because fullScreenLayoutParams() computes bounds once, and a live
+    // window doesn't recompute its own LayoutParams on rotation — confirmed on-device that
+    // without this, rotating while locked leaves the window's dimensions from the *previous*
+    // orientation, collapsing the touch-blocked area into a corner of the new one rather than
+    // covering the new orientation's full bounds. Registered on the application Context, which is
+    // notified of config changes independent of which WindowManager the overlay itself uses.
+    private var configCallbacks: ComponentCallbacks? = null
 
     private var unlockHandleView: UnlockHandleView? = null
     private var unlockHandleWindowManager: WindowManager? = null
@@ -88,7 +94,6 @@ class OverlayController @Inject constructor(
 
         val view = OverlayView(
             context = context,
-            onUnlockRequested = onUnlockRequested,
             onDoubleTapDetected = {
                 showUnlockHandle(onUnlockRequested)
             },
@@ -108,13 +113,43 @@ class OverlayController @Inject constructor(
 
     private fun tryAddOverlayView(view: OverlayView, manager: WindowManager, type: Int): Boolean {
         return try {
-            manager.addView(view, fullScreenLayoutParams(type))
+            manager.addView(view, fullScreenLayoutParams(manager, type))
             overlayView = view
             overlayWindowManager = manager
+            overlayWindowType = type
+            registerRotationListener()
             true
         } catch (e: Exception) {
             Timber.e(e, "Failed to add overlay view (type=$type)")
             false
+        }
+    }
+
+    private fun registerRotationListener() {
+        if (configCallbacks != null) return
+        val callbacks = object : ComponentCallbacks {
+            override fun onConfigurationChanged(newConfig: Configuration) = relayoutForCurrentBounds()
+
+            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION") // Required override; unused, no memory to trim here.
+            override fun onLowMemory() {}
+        }
+        context.registerComponentCallbacks(callbacks)
+        configCallbacks = callbacks
+    }
+
+    private fun unregisterRotationListener() {
+        configCallbacks?.let { context.unregisterComponentCallbacks(it) }
+        configCallbacks = null
+    }
+
+    private fun relayoutForCurrentBounds() {
+        val view = overlayView ?: return
+        val manager = overlayWindowManager ?: return
+        val type = overlayWindowType ?: return
+        try {
+            manager.updateViewLayout(view, fullScreenLayoutParams(manager, type))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to relayout overlay view after configuration change")
         }
     }
 
@@ -124,6 +159,8 @@ class OverlayController @Inject constructor(
 
         // Clean up unlock handle
         hideUnlockHandle()
+
+        unregisterRotationListener()
 
         // Clean up main overlay
         overlayView?.let {
@@ -136,6 +173,7 @@ class OverlayController @Inject constructor(
         }
         overlayView = null
         overlayWindowManager = null
+        overlayWindowType = null
     }
 
     /**
@@ -224,24 +262,90 @@ class OverlayController @Inject constructor(
         // coroutines that might have been on suspend state (eg. supsended with delay)
     }
 
+    /**
+     * Explicit real display bounds rather than MATCH_PARENT, which — confirmed on-device,
+     * empirically, after MATCH_PARENT + a manual y-offset left a same-size gap on the wrong edge
+     * post-rotation — turns out to trigger an implicit system-bar-avoidance reservation of its
+     * own for TYPE_ACCESSIBILITY_OVERLAY specifically (confirmed via dumpsys `Frames`, which shows
+     * the actual applied frame shrunk by ~status-bar-height on one edge regardless of the
+     * requested LayoutParams). That reservation is tied to the *device's* natural-orientation edge
+     * rather than the display's current rotation, and — confirmed by direct on-device touch
+     * testing, tapping through to see which taps this window actually receives — it's correct in
+     * portrait (protects the real status bar) but wrong in landscape (lands on the nav-bar edge
+     * instead, leaving the real status bar, now a different edge, unprotected). It persists
+     * identically whether or not `fitInsetsTypes` is explicitly zeroed, so it isn't something
+     * disable-able through public LayoutParams fields — it must be worked with, not fought.
+     *
+     * So: request the display's actual pixel bounds (fixes the *nav-bar* gap the platform
+     * reservation left behind in landscape — confirmed via tapping past the platform's own
+     * reserved strip and seeing the tap correctly consumed instead of reaching the launcher), and
+     * *separately*, on API 30+, additionally shrink our own request by the live, rotation-correct
+     * WindowInsets.Type.statusBars() inset (which — unlike a raw pixel offset — is recomputed
+     * fresh per rotation and always reports the edge the status bar is *actually* on right now).
+     * This runs unconditionally, regardless of what the platform's own reservation independently
+     * does: in portrait, where the platform's reservation already protects the status bar, this
+     * doubles up on the same edge — confirmed on-device this is NOT harmless, it stacks into a
+     * genuine 150px dead zone (2x the ~75px status bar height) where touch-blocking silently
+     * doesn't apply to real app content underneath, worse than the gap being fixed. So this only
+     * runs away from ROTATION_0 (natural orientation), where the platform's reservation lands on
+     * a *different* edge than the real status bar and there's no stacking risk; in landscape it's
+     * what actually closes the real gap the platform reservation misses.
+     * Below API 30, there's no live per-edge inset query available, so this falls back to the
+     * historical fixed-top-offset behavior — correct in portrait, not rotation-aware in landscape
+     * on these older API levels, the same kind of disclosed narrower-on-old-API-levels limitation
+     * already documented elsewhere in this codebase (see the shade-auto-dismiss API gate in
+     * TouchLockAccessibilityService).
+     *
+     * Since a live window doesn't recompute any of this on its own, [relayoutForCurrentBounds]
+     * reapplies it on every configuration change.
+     */
     @SuppressLint("RtlHardcoded")
-    private fun fullScreenLayoutParams(type: Int): WindowManager.LayoutParams {
+    @VisibleForTesting
+    internal fun fullScreenLayoutParams(manager: WindowManager, type: Int): WindowManager.LayoutParams {
+        val bounds: Rect
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val metrics = manager.currentWindowMetrics
+            bounds = Rect(metrics.bounds)
+            @Suppress("DEPRECATION") // defaultDisplay itself, not getRealSize; no non-deprecated equivalent here.
+            val rotation = manager.defaultDisplay.rotation
+            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && rotation != Surface.ROTATION_0) {
+                val statusBarInsets = metrics.windowInsets.getInsets(WindowInsets.Type.statusBars())
+                bounds.left += statusBarInsets.left
+                bounds.top += statusBarInsets.top
+                bounds.right -= statusBarInsets.right
+                bounds.bottom -= statusBarInsets.bottom
+            }
+        } else {
+            val point = Point()
+            @Suppress("DEPRECATION")
+            manager.defaultDisplay.getRealSize(point)
+            bounds = Rect(0, 0, point.x, point.y)
+            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
+                bounds.top += legacyStatusBarHeightPx()
+            }
+        }
         return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            bounds.width(),
+            bounds.height(),
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
-                // Inset the top edge so the status bar and its privacy/cast/record indicators
-                // are never covered. Extends through the nav bar at the bottom, unlike the
-                // application-overlay path which can never intercept input there.
-                y = statusBarHeightPx()
-            }
+            x = bounds.left
+            y = bounds.top
         }
+    }
+
+    /**
+     * Status bar height in px, for the pre-API-30 fallback in [fullScreenLayoutParams] only —
+     * below API 30 there's no live per-edge WindowInsets query available. Resource lookup rather
+     * than the deprecated WindowInsets APIs so it works uniformly from minSdk 26.
+     */
+    private fun legacyStatusBarHeightPx(): Int {
+        val resourceId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
     }
 
     private fun handleLayoutParams(type: Int): WindowManager.LayoutParams {
