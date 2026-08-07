@@ -300,14 +300,15 @@ class OverlayController @Inject constructor(
      * reapplies it on every configuration change.
      */
     @SuppressLint("RtlHardcoded")
-    private fun fullScreenLayoutParams(manager: WindowManager, type: Int): WindowManager.LayoutParams {
+    @VisibleForTesting
+    internal fun fullScreenLayoutParams(manager: WindowManager, type: Int): WindowManager.LayoutParams {
         val bounds: Rect
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val metrics = manager.currentWindowMetrics
             bounds = Rect(metrics.bounds)
-            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY &&
-                manager.defaultDisplay.rotation != Surface.ROTATION_0
-            ) {
+            @Suppress("DEPRECATION") // defaultDisplay itself, not getRealSize; no non-deprecated equivalent here.
+            val rotation = manager.defaultDisplay.rotation
+            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && rotation != Surface.ROTATION_0) {
                 val statusBarInsets = metrics.windowInsets.getInsets(WindowInsets.Type.statusBars())
                 bounds.left += statusBarInsets.left
                 bounds.top += statusBarInsets.top
