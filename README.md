@@ -67,7 +67,10 @@ The app works fully **offline** and does not require an account or network acces
 > An optional **Strong Lock** mode (see below) narrows the first limitation: it blocks navigation bar
 > taps and auto-dismisses the notification shade while locked. It does not make the app unescapable —
 > on gesture-navigation devices, back/home/recents swipes are not blocked, only reacted to (the
-> protected app is relaunched near-instantly if the user swipes away).
+> protected app is relaunched near-instantly if the user swipes away). Shade auto-dismiss additionally
+> requires Android 12 (API 31) or higher — the platform API it relies on doesn't exist on older
+> versions. On Android 8–11, Strong Lock still blocks the navigation bar and snaps back, but the
+> shade itself stays open if pulled down.
 
 ---
 

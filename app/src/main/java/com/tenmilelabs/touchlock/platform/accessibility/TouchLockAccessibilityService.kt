@@ -76,7 +76,13 @@ class TouchLockAccessibilityService : AccessibilityService() {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val eventPackage = e.packageName?.toString()
-        if (eventPackage != null) {
+        // SystemUI (the shade) and allowlisted packages (Settings, dialer, clock, emergency
+        // alerts) are transient system surfaces, not an app the user is actually using — never
+        // let one overwrite the last real foreground app. Otherwise locking right after pulling
+        // the shade (e.g. from the persistent notification) captures "com.android.systemui" as
+        // the protected package below; it has no launch intent, so every subsequent real app
+        // switch reads as "navigation away" and snap-back silently fails.
+        if (isEligibleProtectedCandidate(eventPackage)) {
             lastKnownForegroundPackage = eventPackage
         }
 
@@ -92,7 +98,9 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // Adopt the first package observed while locked as the protected one instead of leaving
         // snap-back permanently disabled for the rest of the session.
         if (protectedPackageName == null) {
-            protectedPackageName = eventPackage
+            if (isEligibleProtectedCandidate(eventPackage)) {
+                protectedPackageName = eventPackage
+            }
             return
         }
         val protected = protectedPackageName ?: return
@@ -140,6 +148,10 @@ class TouchLockAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** See the comment on the `lastKnownForegroundPackage` assignment in [onAccessibilityEvent]. */
+    private fun isEligibleProtectedCandidate(packageName: String?): Boolean =
+        packageName != null && packageName != SYSTEM_UI_PACKAGE && !allowlist.isAllowlisted(packageName)
+
     private fun dismissShade() {
         // Confirmed on-device (Samsung SM-S908U, Android 16) that GLOBAL_ACTION_BACK reliably
         // closes an already-expanded shade where GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE alone
@@ -153,6 +165,11 @@ class TouchLockAccessibilityService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val result = performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
             Timber.d("performGlobalAction(DISMISS_NOTIFICATION_SHADE) returned $result")
+        } else {
+            // GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE doesn't exist before API 31; on API 26-30
+            // this is a no-op and the shade stays open. Nav-bar blocking and snap-back still
+            // apply. See the README's Strong Lock section for the disclosed limitation.
+            Timber.d("Shade auto-dismiss unavailable below API 31 (running ${Build.VERSION.SDK_INT})")
         }
     }
 

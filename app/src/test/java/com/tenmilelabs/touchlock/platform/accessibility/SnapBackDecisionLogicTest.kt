@@ -48,13 +48,21 @@ class SnapBackDecisionLogicTest {
             isLocked = locked
         }
 
+        /** Mirrors isEligibleProtectedCandidate(): SystemUI and allowlisted packages are transient
+         *  system surfaces, never adopted as the protected package. */
+        private fun isEligibleProtectedCandidate(pkg: String?): Boolean =
+            pkg != null && pkg != SYSTEM_UI_PACKAGE && pkg !in allowlisted
+
         /** Mirrors onAccessibilityEvent()'s decision logic for a TYPE_WINDOW_STATE_CHANGED event. */
         fun onWindowStateChanged(eventPackage: String) {
             if (!isLocked) return
-            // Edge case fix: adopt the first package observed while locked if the lock-engagement
-            // capture raced and came up null, instead of leaving snap-back disabled all session.
+            // Edge case fix: adopt the first eligible package observed while locked if the
+            // lock-engagement capture raced and came up null, instead of leaving snap-back
+            // disabled all session. Never adopt SystemUI/allowlisted packages this way.
             if (protectedPackageName == null) {
-                protectedPackageName = eventPackage
+                if (isEligibleProtectedCandidate(eventPackage)) {
+                    protectedPackageName = eventPackage
+                }
                 return
             }
             val protected = protectedPackageName ?: return
@@ -84,6 +92,7 @@ class SnapBackDecisionLogicTest {
         companion object {
             private const val MAX_SNAP_BACK_ATTEMPTS = 3
             private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
+            const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         }
     }
 
@@ -211,6 +220,39 @@ class SnapBackDecisionLogicTest {
         harness.onWindowStateChanged("com.launcher")
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.was.in.foreground")
+        assertThat(harness.snapBackCount).isEqualTo(1)
+    }
+
+    // --- SystemUI must never be adopted as the protected package ---
+    //
+    // Codex review finding: pulling the shade (e.g. from the persistent notification) right as
+    // the lock engages, or right as a mid-lock accessibility reconnect races the capture, could
+    // adopt "com.android.systemui" as the protected package. It has no launch intent, so every
+    // subsequent real app switch reads as "navigation away" and snap-back silently fails for the
+    // rest of the session.
+
+    @Test
+    fun `does not adopt SystemUI as the protected package during the reconnect race`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true, knownForegroundPackage = null)
+
+        harness.onWindowStateChanged(Harness.SYSTEM_UI_PACKAGE)
+        assertThat(harness.protectedPackageName).isNull()
+
+        harness.onWindowStateChanged("com.real.app")
+        assertThat(harness.protectedPackageName).isEqualTo("com.real.app")
+    }
+
+    @Test
+    fun `snaps back to the correctly-adopted package, never to SystemUI`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true, knownForegroundPackage = null)
+        harness.onWindowStateChanged(Harness.SYSTEM_UI_PACKAGE) // fails to adopt
+        harness.onWindowStateChanged("com.real.app") // adopts as protected
+
+        harness.onWindowStateChanged("com.launcher") // real navigation away
+
+        assertThat(harness.lastRelaunchedPackage).isEqualTo("com.real.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
     }
 
