@@ -105,21 +105,6 @@ class OverlayControllerTest {
         assertThat(type).isEqualTo(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
     }
 
-    @Test
-    fun `statusBarHeightPx does not crash when the resource is absent`() {
-        every { mockResources.getIdentifier("status_bar_height", "dimen", "android") } returns 0
-
-        assertThat(controller.statusBarHeightPx()).isEqualTo(0)
-    }
-
-    @Test
-    fun `statusBarHeightPx resolves the dimension when the resource exists`() {
-        every { mockResources.getIdentifier("status_bar_height", "dimen", "android") } returns 42
-        every { mockResources.getDimensionPixelSize(42) } returns 137
-
-        assertThat(controller.statusBarHeightPx()).isEqualTo(137)
-    }
-
     // --- hide() crash safety ---
 
     @Test

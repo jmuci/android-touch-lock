@@ -18,8 +18,11 @@ class SnapBackDecisionLogicTest {
     ) {
         var protectedPackageName: String? = null
             private set
-        var snapBackCount = 0
-            private set
+
+        /** Mirrors [TouchLockAccessibilityService.snapBackTimestamps]. */
+        private val snapBackTimestamps = ArrayDeque<Long>()
+        val snapBackCount: Int
+            get() = snapBackTimestamps.size
         var forceUnlockTriggered = false
             private set
         var lastRelaunchedPackage: String? = null
@@ -80,7 +83,7 @@ class SnapBackDecisionLogicTest {
                 // Mirrors onServiceConnected()'s capture: uses whatever was last observed, which
                 // can be null if the service (re)connected right as the lock engaged.
                 protectedPackageName = knownForegroundPackage
-                snapBackCount = 0
+                snapBackTimestamps.clear()
             } else if (!locked) {
                 protectedPackageName = null
             }
@@ -132,9 +135,16 @@ class SnapBackDecisionLogicTest {
             return true
         }
 
+        /** Mirrors [TouchLockAccessibilityService.performSnapBack]'s rolling-window rate limit. */
         private fun performSnapBack(protected: String) {
-            snapBackCount++
-            if (snapBackCount > MAX_SNAP_BACK_ATTEMPTS) {
+            snapBackTimestamps.addLast(currentElapsedMillis)
+            while (snapBackTimestamps.isNotEmpty() &&
+                currentElapsedMillis - snapBackTimestamps.first() > SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+            ) {
+                snapBackTimestamps.removeFirst()
+            }
+
+            if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
                 forceUnlockTriggered = true
                 return
             }
@@ -143,6 +153,7 @@ class SnapBackDecisionLogicTest {
 
         companion object {
             private const val MAX_SNAP_BACK_ATTEMPTS = 3
+            const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L
             private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
             const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         }
@@ -252,6 +263,54 @@ class SnapBackDecisionLogicTest {
         repeat(4) { harness.onWindowStateChanged("com.launcher") }
 
         assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    // --- Rate limiting: rolling window, not a flat per-session cap ---
+    //
+    // Confirmed on-device (emulator, gesture navigation — the modern default): a flat per-session
+    // cap defeats itself under completely normal use. Four genuine, isolated swipe-home gestures
+    // roughly 10-15s apart — not rapid-fire, not an attempt to defeat the lock — exhausted a flat
+    // counter and silently released Strong Lock. A rolling window fixes that: only a real, rapid
+    // fight against the lock still trips the safety release.
+
+    @Test
+    fun `snap-backs spread beyond the rate-limit window never accumulate toward the release threshold`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        repeat(5) {
+            harness.onWindowStateChanged("com.launcher")
+            harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS + 1
+        }
+
+        assertThat(harness.forceUnlockTriggered).isFalse()
+    }
+
+    @Test
+    fun `4 snap-backs packed inside the rate-limit window still releases the lock`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        repeat(4) {
+            harness.onWindowStateChanged("com.launcher")
+            harness.currentElapsedMillis += 100L // rapid, well within the window
+        }
+
+        assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    @Test
+    fun `attempts older than the window drop out of the count`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 packed at t=0
+        assertThat(harness.snapBackCount).isEqualTo(3)
+
+        harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS + 1
+        harness.onWindowStateChanged("com.launcher") // 1 more, long after the first 3 aged out
+
+        assertThat(harness.snapBackCount).isEqualTo(1)
+        assertThat(harness.forceUnlockTriggered).isFalse()
     }
 
     @Test

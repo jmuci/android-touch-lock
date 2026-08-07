@@ -52,7 +52,15 @@ class TouchLockAccessibilityService : AccessibilityService() {
     // Captured when the lock engages; cleared when it releases. Null means "no active lock
     // session" and is itself part of the fail-open guard below.
     private var protectedPackageName: String? = null
-    private var snapBackCount = 0
+
+    // Timestamps (elapsedRealtime) of recent snap-back relaunches, oldest first. Confirmed
+    // on-device that a flat per-session cap defeats itself under completely normal use: on
+    // gesture-navigation devices (the modern default), 3-4 unrelated swipe-home gestures spread
+    // over the course of watching a video exhaust a per-session counter and silently disable
+    // Strong Lock with no warning. Rate-limiting within a rolling window instead means isolated,
+    // spaced-out navigation attempts never accumulate, while a rapid real fight against the lock
+    // still trips the release — see [performSnapBack].
+    private val snapBackTimestamps = ArrayDeque<Long>()
 
     // Set whenever we dispatch a global action of our own (e.g. dismissing the shade). Confirmed
     // on-device that this can itself generate a window-state-changed event that gets misread as
@@ -71,7 +79,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
             LockOverlayService.lockState.collect { state ->
                 if (state == LockState.Locked && protectedPackageName == null) {
                     protectedPackageName = lastKnownForegroundPackage
-                    snapBackCount = 0
+                    snapBackTimestamps.clear()
                     Timber.d("Lock engaged, protecting package: $protectedPackageName")
                 } else if (state != LockState.Locked) {
                     protectedPackageName = null
@@ -188,15 +196,28 @@ class TouchLockAccessibilityService : AccessibilityService() {
 
     /**
      * Relaunches the protected package after the user navigates away while locked. Rate-limited
-     * to [MAX_SNAP_BACK_ATTEMPTS] per lock session — beyond that, a fight with the launcher
-     * self-terminates by releasing the lock instead of looping.
+     * to [MAX_SNAP_BACK_ATTEMPTS] within a rolling [SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS] window —
+     * not a flat per-session cap, which confirmed on-device to defeat itself: a handful of
+     * unrelated swipe-home gestures spread across a whole video session would exhaust it and
+     * silently disable Strong Lock. Windowing means only a genuine rapid fight with the launcher
+     * self-terminates by releasing the lock instead of looping; isolated attempts age out and
+     * never accumulate.
      */
     private fun performSnapBack(protectedPackage: String) {
-        snapBackCount++
-        Timber.d("Snap-back #$snapBackCount to $protectedPackage")
+        val now = SystemClock.elapsedRealtime()
+        snapBackTimestamps.addLast(now)
+        while (snapBackTimestamps.isNotEmpty() &&
+            now - snapBackTimestamps.first() > SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+        ) {
+            snapBackTimestamps.removeFirst()
+        }
+        Timber.d(
+            "Snap-back (${snapBackTimestamps.size} within the last " +
+                "${SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS}ms) to $protectedPackage"
+        )
 
-        if (snapBackCount > MAX_SNAP_BACK_ATTEMPTS) {
-            Timber.w("Snap-back limit reached, auto-releasing lock")
+        if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
+            Timber.w("Snap-back limit reached within the rate-limit window, auto-releasing lock")
             triggerForceUnlock()
             return
         }
@@ -293,6 +314,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
     companion object {
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
+        private const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L
         private const val SHADE_DISMISS_DEBOUNCE_MILLIS = 1000L
         private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
     }
