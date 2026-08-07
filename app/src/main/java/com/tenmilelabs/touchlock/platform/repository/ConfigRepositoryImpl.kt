@@ -18,4 +18,12 @@ class ConfigRepositoryImpl @Inject constructor(
     override suspend fun setDebugOverlayVisible(visible: Boolean) {
         lockPreferences.setDebugOverlayVisible(visible)
     }
+
+    override fun observeBackstopTimeoutMinutes(): Flow<Int> {
+        return lockPreferences.backstopTimeoutMinutes
+    }
+
+    override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
+        lockPreferences.setBackstopTimeoutMinutes(minutes)
+    }
 }

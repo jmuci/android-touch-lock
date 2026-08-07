@@ -219,13 +219,63 @@ Key takeaway:
 
 ## 2. Why Not X? (Design Decisions)
 
-### Why not AccessibilityService?
+### Why not AccessibilityService? (original decision — reversed 2026-08-04, see addendum below)
 
 - Meant for users with disabilities, not general-purpose touch interception
 - Google Play heavily scrutinizes and often rejects misuse
 - Requires intrusive permissions and disclosures
 
-> Conclusion: Using AccessibilityService for a kids lock app is overreaching and risky.
+> Original conclusion: Using AccessibilityService for a kids lock app is overreaching and risky.
+>
+> **Reversed 2026-08-04**: the touch overlay alone cannot block the navigation bar or notification
+> shade, so a supervised child can still tap Home/Back/Recents or pull down the shade and escape the
+> lock — the exact failure mode this app exists to prevent. An `AccessibilityService`, used narrowly
+> and only for that purpose (never to read screen content, never a claimed disability tool), is the only
+> remaining mechanism capable of closing that gap. It ships as an **optional, off-by-default** mode with
+> a dedicated in-app disclosure — the original risk (scope creep, opaque data access) is mitigated by
+> keeping the capability minimal and disclosed, not by avoiding the API outright. See the Task 0 findings
+> below for what was verified on-device before committing to this reversal.
+
+**2026-08-04 addendum — Task 0 spike, device-verified findings.** This decision is under active
+reconsideration (see the "Strong Lock" accessibility plan). Before investing in the real
+architecture, a throwaway `AccessibilityService` was sideloaded onto a real device (Samsung
+SM-S908U, Android 16 / SDK 36) to settle three unvalidated premises. Code was deleted after
+testing; only these findings are kept.
+
+1. **Does a `TYPE_ACCESSIBILITY_OVERLAY` window swallow 3-button nav bar taps?** **Yes, confirmed.**
+   A window added via the *service's own* `WindowManager` (not the app's — that throws
+   `BadTokenException` for type 2032), sized to the nav bar region with `FLAG_NOT_FOCUSABLE`
+   (no `FLAG_NOT_TOUCHABLE`), fully intercepted taps on all three on-screen buttons (Home, Back,
+   Recents). Verified two ways: the overlay's own touch listener logged the intercepted events,
+   and — more importantly — the foreground activity (Settings) never changed across any of the
+   three taps. A baseline with the service disabled confirmed the same tap *does* navigate to the
+   launcher, ruling out a broken test.
+
+2. **Does `onKeyEvent` receive `KEYCODE_BACK`?** **No — confirmed broken on gesture nav, this
+   Android version.** A real edge-swipe back gesture (touch-injected, not a synthetic key) was
+   fully handled by `ShellBackPreview` / `BackAnimationController` via the modern
+   `OnBackInvokedCallback` predictive-back path — logs showed the callback dispatch end-to-end,
+   and `onKeyEvent` never fired despite `canRequestFilterKeyEvents`/`flagRequestFilterKeyEvents`
+   being set and the service confirmed bound (`dumpsys accessibility` showed
+   `requestFilterKeyEvents=true`, `capabilities=8`). This matches the plan's stated risk almost
+   exactly: predictive back has fully replaced the legacy `KeyEvent` dispatch path that
+   `AccessibilityService.onKeyEvent` taps into, at least on Android 16. On 3-button nav the point
+   is moot in practice — the overlay already swallows the on-screen Back tap before any key event
+   would be generated (see finding 1) — but there is currently **no working mechanism for
+   consuming a gesture-nav back swipe** that starts outside the nav-bar-only overlay region. A
+   synthetic `adb shell input keyevent` (both `KEYCODE_BACK` and `KEYCODE_VOLUME_DOWN`) also never
+   reached `onKeyEvent`, though that test is inconclusive on its own (injected keys may not be
+   filtered the same way as real ones) — the real edge-swipe result is the load-bearing one.
+3. **Does `performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)` reliably close the
+   shade?** **Yes, confirmed.** Opened the shade (`cmd statusbar expand-notifications`), triggered
+   the global action, `performGlobalAction` returned `true`, and a screenshot confirmed the shade
+   was fully closed.
+
+**Net effect on the plan's capability matrix:** nav-bar tap blocking (finding 1) and shade
+dismissal (finding 3) are solid on 3-button nav. The gesture-nav back-swipe mitigation
+(`onKeyEvent`) does **not** work as designed on Android 16 — a design relying on it needs
+either a fallback (e.g., snap-back after the fact) or must accept gesture-nav back as
+unblockable, same as Home/Recents swipes already are.
 
 ---
 

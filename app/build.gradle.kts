@@ -6,6 +6,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val gitCommitHash: String = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().trim().ifBlank { "unknown" }
+
+val gitIsDirty: Boolean = providers.exec {
+    commandLine("git", "status", "--porcelain")
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().isNotBlank()
+
 android {
     namespace = "com.tenmilelabs.touchlock"
     compileSdk {
@@ -19,6 +29,11 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "GIT_COMMIT_HASH",
+            "\"$gitCommitHash${if (gitIsDirty) "-dirty" else ""}\""
+        )
     }
 
     buildTypes {

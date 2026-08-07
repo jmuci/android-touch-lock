@@ -8,6 +8,7 @@ import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeClock
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
+import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.ui.screens.home.HomeViewModel
@@ -50,6 +51,7 @@ class ViewModelFlowCompositionTest {
     private lateinit var observeUsageTimer: ObserveUsageTimerUseCase
     private lateinit var overlayPermissionManager: OverlayPermissionManager
     private lateinit var notificationPermissionManager: NotificationPermissionManager
+    private lateinit var accessibilityPermissionManager: AccessibilityPermissionManager
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -77,16 +79,19 @@ class ViewModelFlowCompositionTest {
         // Mock permission managers
         overlayPermissionManager = mockk(relaxed = true)
         notificationPermissionManager = mockk(relaxed = true)
+        accessibilityPermissionManager = mockk(relaxed = true)
         every { overlayPermissionManager.hasPermission() } returns true
         every { notificationPermissionManager.areNotificationsAvailable() } returns true
         every { notificationPermissionManager.getNotificationIssueDescription() } returns ""
+        every { accessibilityPermissionManager.isEnabled() } returns false
 
         viewModel = HomeViewModel(
             lockRepository = fakeLockRepository,
             configRepository = fakeConfigRepository,
             observeUsageTimer = observeUsageTimer,
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            accessibilityPermissionManager = accessibilityPermissionManager
         )
     }
 
@@ -210,7 +215,8 @@ class ViewModelFlowCompositionTest {
             configRepository = fakeConfigRepository,
             observeUsageTimer = newObserveUsageTimer,
             overlayPermissionManager = overlayPermissionManager,
-            notificationPermissionManager = notificationPermissionManager
+            notificationPermissionManager = notificationPermissionManager,
+            accessibilityPermissionManager = accessibilityPermissionManager
         )
 
         // Allow ViewModel flow combination to complete
@@ -286,6 +292,7 @@ class ViewModelFlowCompositionTest {
 
     private class FakeConfigRepository : ConfigRepository {
         private val debugOverlayVisibleFlow = MutableStateFlow(false)
+        private val backstopTimeoutMinutesFlow = MutableStateFlow(60)
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> {
             return debugOverlayVisibleFlow
@@ -293,6 +300,14 @@ class ViewModelFlowCompositionTest {
 
         override suspend fun setDebugOverlayVisible(visible: Boolean) {
             debugOverlayVisibleFlow.value = visible
+        }
+
+        override fun observeBackstopTimeoutMinutes(): Flow<Int> {
+            return backstopTimeoutMinutesFlow
+        }
+
+        override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
+            backstopTimeoutMinutesFlow.value = minutes
         }
     }
 }

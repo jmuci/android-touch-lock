@@ -47,12 +47,14 @@ class HomeScreenTest {
         lockState: LockState = LockState.Unlocked,
         hasOverlayPermission: Boolean = true,
         areNotificationsAvailable: Boolean = true,
+        isAccessibilityEnabled: Boolean = false,
         notificationIssueDescription: String = "",
         usageTimer: UsageTimerState = UsageTimerState.INITIAL,
         debugOverlayVisible: Boolean = false,
         onDelayedLockClicked: () -> Unit = {},
         onRequestOverlayPermission: () -> Unit = {},
         onRequestNotificationPermission: () -> Unit = {},
+        onLearnAboutStrongLock: () -> Unit = {},
         onDebugOverlayVisibleChanged: (Boolean) -> Unit = {},
     ) {
         composeTestRule.setContent {
@@ -61,12 +63,14 @@ class HomeScreenTest {
                     lockState = lockState,
                     hasOverlayPermission = hasOverlayPermission,
                     areNotificationsAvailable = areNotificationsAvailable,
+                    isAccessibilityEnabled = isAccessibilityEnabled,
                     notificationIssueDescription = notificationIssueDescription,
                     usageTimer = usageTimer,
                     debugOverlayVisible = debugOverlayVisible,
                     onDelayedLockClicked = onDelayedLockClicked,
                     onRequestOverlayPermission = onRequestOverlayPermission,
                     onRequestNotificationPermission = onRequestNotificationPermission,
+                    onLearnAboutStrongLock = onLearnAboutStrongLock,
                     onDebugOverlayVisibleChanged = onDebugOverlayVisibleChanged,
                 )
             }
@@ -88,11 +92,13 @@ class HomeScreenTest {
                     lockState = lockState,
                     hasOverlayPermission = true,
                     areNotificationsAvailable = true,
+                    isAccessibilityEnabled = false,
                     notificationIssueDescription = "",
                     usageTimer = UsageTimerState.INITIAL,
                     onDelayedLockClicked = { lockStateFlow.value = LockState.Locked },
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
+                    onLearnAboutStrongLock = {},
                     onDebugOverlayVisibleChanged = {},
                     debugOverlayVisible = false,
                 )
@@ -137,11 +143,13 @@ class HomeScreenTest {
                     lockState = lockState,
                     hasOverlayPermission = true,
                     areNotificationsAvailable = true,
+                    isAccessibilityEnabled = false,
                     notificationIssueDescription = "",
                     usageTimer = UsageTimerState.INITIAL,
                     onDelayedLockClicked = {},
                     onRequestOverlayPermission = {},
                     onRequestNotificationPermission = {},
+                    onLearnAboutStrongLock = {},
                     onDebugOverlayVisibleChanged = {},
                     debugOverlayVisible = false,
                 )
@@ -276,7 +284,9 @@ class HomeScreenTest {
             usageTimer = UsageTimerState(elapsedMillisToday = 0L, isRunning = false),
         )
 
-        composeTestRule.onNodeWithText("Time locked today").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Time locked today")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -287,14 +297,18 @@ class HomeScreenTest {
             usageTimer = UsageTimerState(elapsedMillisToday = 125_000L, isRunning = false),
         )
 
-        composeTestRule.onNodeWithText("2m 5s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2m 5s")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
     fun usageTimerCard_showsZeroTimeOnInitialState() {
         setContent(usageTimer = UsageTimerState.INITIAL)
 
-        composeTestRule.onNodeWithText("0m 0s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0m 0s")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     // ---------------------------------------------------------------------------

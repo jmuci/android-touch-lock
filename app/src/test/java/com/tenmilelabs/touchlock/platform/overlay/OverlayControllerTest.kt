@@ -5,8 +5,11 @@ import android.content.res.Resources
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import com.google.common.truth.Truth.assertThat
+import com.tenmilelabs.touchlock.platform.accessibility.AccessibilityServiceHolder
+import com.tenmilelabs.touchlock.platform.accessibility.TouchLockAccessibilityService
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Before
 import org.junit.Test
 
@@ -35,6 +38,7 @@ class OverlayControllerTest {
     private lateinit var mockContext: Context
     private lateinit var mockWindowManager: WindowManager
     private lateinit var mockResources: Resources
+    private lateinit var accessibilityServiceHolder: AccessibilityServiceHolder
     private lateinit var controller: OverlayController
 
     @Before
@@ -47,7 +51,10 @@ class OverlayControllerTest {
             every { theme } returns mockk(relaxed = true)
             every { applicationContext } returns this
         }
-        controller = OverlayController(mockContext)
+        accessibilityServiceHolder = mockk(relaxed = true) {
+            every { currentService() } returns null
+        }
+        controller = OverlayController(mockContext, accessibilityServiceHolder)
     }
 
     // --- Construction safety ---
@@ -55,9 +62,37 @@ class OverlayControllerTest {
     @Test
     fun `OverlayController can be constructed without crash`() {
         // Verifies CoroutineScope and WindowManager init don't crash
-        val ctrl = OverlayController(mockContext)
+        val ctrl = OverlayController(mockContext, accessibilityServiceHolder)
         // Constructor completed without exception
         ctrl.hide() // no-op, shouldn't crash
+    }
+
+    // --- Window-type selection (Task 4) ---
+
+    @Test
+    fun `hide targets the application WindowManager when accessibility is not connected`() {
+        every { accessibilityServiceHolder.currentService() } returns null
+
+        controller.hide()
+
+        // No view was ever shown, so removeView is never called — this just documents that,
+        // absent a connected service, resolution never touches the service's WindowManager.
+        verify(exactly = 0) { mockWindowManager.removeView(any()) }
+    }
+
+    @Test
+    fun `statusBarHeightPx does not crash when the resource is absent`() {
+        every { mockResources.getIdentifier("status_bar_height", "dimen", "android") } returns 0
+
+        assertThat(controller.statusBarHeightPx()).isEqualTo(0)
+    }
+
+    @Test
+    fun `statusBarHeightPx resolves the dimension when the resource exists`() {
+        every { mockResources.getIdentifier("status_bar_height", "dimen", "android") } returns 42
+        every { mockResources.getDimensionPixelSize(42) } returns 137
+
+        assertThat(controller.statusBarHeightPx()).isEqualTo(137)
     }
 
     // --- hide() crash safety ---

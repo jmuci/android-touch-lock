@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import com.tenmilelabs.touchlock.service.LockOverlayService
@@ -24,6 +25,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var notificationPermissionManager: NotificationPermissionManager
 
+    @Inject
+    lateinit var accessibilityPermissionManager: AccessibilityPermissionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Timber.d("MainActivity.onCreate() called")
@@ -41,6 +45,10 @@ class MainActivity : ComponentActivity() {
                 onRequestNotificationPermission = {
                     Timber.d("onRequestNotificationPermission clicked, starting settings")
                     startActivity(notificationPermissionManager.createNotificationSettingsIntent())
+                },
+                onRequestAccessibilityPermission = {
+                    Timber.d("onRequestAccessibilityPermission clicked, starting settings")
+                    startActivity(accessibilityPermissionManager.createSettingsIntent())
                 }
             )
         }

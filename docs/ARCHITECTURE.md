@@ -7,9 +7,19 @@
 
 ## Project Overview
 
-Touch Lock is a lightweight Android utility that disables touch input via a full-screen `WindowManager` overlay while keeping underlying content visible. The primary use case is supervised scenarios (toddler watching video, preventing hang-ups during video calls). The app is intentionally offline-first, requires no account, and avoids Accessibility services.
+Touch Lock is a lightweight Android utility that disables touch input via a full-screen `WindowManager` overlay while keeping underlying content visible. The primary use case is supervised scenarios (toddler watching video, preventing hang-ups during video calls). The app is intentionally offline-first and requires no account.
 
-**Key constraints**: minSdk 26, no network, no Accessibility services, no kiosk mode, no device owner APIs.
+It ships in two modes:
+- **Default mode** (always available): touch-blocking overlay only, no special permissions beyond
+  `SYSTEM_ALERT_WINDOW`.
+- **Strong Lock mode** (optional, off by default): additionally uses an `AccessibilityService`, scoped
+  narrowly to parental-supervision lock enforcement — blocking navigation bar taps and relaunching the
+  protected app if the user navigates away while locked. See "Strong Lock: Accessibility-Based
+  Hardening" below. Default mode remains fully functional and is the fallback if Strong Lock is off,
+  unavailable, or fails.
+
+**Key constraints**: minSdk 26, no network, no kiosk mode, no device owner APIs. Accessibility is
+optional and additive, never required for the app's core function.
 
 ---
 
@@ -253,13 +263,66 @@ Date mismatch on read returns `null` → triggers daily reset in `ObserveUsageTi
 
 ---
 
+## Strong Lock: Accessibility-Based Hardening (Optional)
+
+Strong Lock is an **optional, off-by-default** enhancement layered on top of the default touch overlay.
+It never replaces the default path — if accessibility is off, unavailable (e.g. Android 17+ Advanced
+Protection Mode), or fails at runtime, the app behaves exactly as it does today via the existing
+`TYPE_APPLICATION_OVERLAY` path.
+
+```
+TouchLockAccessibilityService (@AndroidEntryPoint)
+  ├── @Inject holder; registers itself on onServiceConnected(), clears on onUnbind()/onDestroy()
+  ├── onKeyEvent()          → consumes BACK while locked (3-button nav only — see below);
+  │                           detects the volume-key force-unlock combo (without consuming)
+  └── onAccessibilityEvent() → shade fronted? dismiss. non-allowlisted package fronted? snap back.
+
+AccessibilityServiceHolder (@Singleton)
+  └── nullable service ref + StateFlow<Boolean> isConnected
+
+OverlayController
+  └── connected? add via the SERVICE's WindowManager with TYPE_ACCESSIBILITY_OVERLAY (nav bar only)
+      else       → current TYPE_APPLICATION_OVERLAY path, unchanged
+```
+
+- `LockOverlayService` remains the single source of truth for lock state. The accessibility service is
+  an input/window capability provider, not a second state owner — it reads `lockState`, never sets it.
+- **Fail-open**: if lock state is anything other than `Locked` (including unknown/unreachable),
+  `onKeyEvent` returns `false` and no global action or relaunch fires.
+- **Never set `isAccessibilityTool="true"`** — this is not a disability tool; a false claim risks
+  account termination.
+- **Mandatory allowlist**, consulted before any suppression action (BACK consumption, shade dismissal,
+  snap-back): Settings/OEM settings, the default dialer/in-call UI, the system alarm/clock, emergency
+  alert packages, and TouchLock's own package are never suppressed and never snapped away from.
+- **On-device findings that shaped this design** (Samsung SM-S908U, Android 16 — see
+  `docs/learnings.md`): the `TYPE_ACCESSIBILITY_OVERLAY` nav-bar overlay does swallow 3-button nav taps
+  (Home/Back/Recents) and `GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE` does reliably close the shade —
+  both confirmed and load-bearing for this design. `onKeyEvent`'s BACK consumption does **not** work
+  under gesture navigation — a real edge-swipe back gesture is fully handled by the modern predictive
+  back path (`OnBackInvokedCallback`) and never reaches `onKeyEvent`. Gesture-nav back, home, and
+  recents are therefore all handled the same way: **reactively, via snap-back**, not blocked outright.
+
+---
+
 ## Known Constraints / Tradeoffs
 
-### System Bars Remain Accessible While Locked
+### System Bars Remain Accessible While Locked (default mode)
 
-The overlay is `TYPE_APPLICATION_OVERLAY` but does not hide system bars (status bar, navigation bar). These remain accessible while locked. This is a deliberate tradeoff: hiding system bars requires an `Activity` window, but using an `Activity` for this purpose caused video call apps (WhatsApp, Meet) to enter picture-in-picture mode — the opposite of the desired behavior.
+In **default mode**, the overlay is `TYPE_APPLICATION_OVERLAY` and does not hide or block system bars
+(status bar, navigation bar). These remain accessible while locked. This is a deliberate tradeoff:
+hiding system bars requires a focused/`Activity` window, but a focusable window pushed video call apps
+(WhatsApp, Meet) into picture-in-picture mode — the opposite of the desired behavior. The overlay stays
+`FLAG_NOT_FOCUSABLE` for this reason, in both default and Strong Lock mode.
 
-**Decision**: Accept system bar accessibility. It's an edge case; the primary use case (toddler watching video) is unaffected.
+**Decision**: Accept system bar accessibility in default mode. It's an edge case; the primary use case
+(toddler watching video) is unaffected. **Strong Lock mode (optional)** narrows this: it elevates the
+overlay to `TYPE_ACCESSIBILITY_OVERLAY` over the navigation bar region only — confirmed on-device to
+swallow nav bar taps (Home/Back/Recents) without requiring focus — and dismisses the notification shade
+via `GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE` if it's opened. The status bar itself is deliberately
+never occluded, in either mode: covering it would hide the mic/camera privacy and screen-record/cast
+indicators, which Play policy prohibits. Strong Lock also does **not** block gesture-navigation
+back/home/recents swipes — those are handled reactively via snap-back (relaunching the protected app),
+not blocked outright; see `docs/learnings.md` for the on-device findings behind this.
 
 ### Countdown Uses Coroutine for Clock ticks with `delay(1000)`
 
@@ -278,6 +341,23 @@ If the app is never brought to foreground after notification dismissal, the serv
 
 The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast for some users (especially children's parents with slower tapping). A future improvement could make this configurable or use `ViewConfiguration.getDoubleTapTimeout()`.
 
+### Notification Shade Detection Uses Package Only, Not Class Name (Strong Lock)
+
+An earlier version of `TouchLockAccessibilityService` tried to identify the shade specifically by
+matching `event.className` against guessed AOSP/OEM shade window class names
+(`NotificationShadeWindowView`, `NotificationPanelView`, etc.). **Confirmed wrong via live device
+logs** (Samsung SM-S908U, Android 16): the shade's `TYPE_WINDOW_STATE_CHANGED` event reports a
+generic `android.widget.FrameLayout` className, not any OEM-specific class — so the guess never
+matched and the shade never auto-dismissed. Reading the real window title (`dumpsys window`
+confirms it's literally `"NotificationShade"`) would need `FLAG_RETRIEVE_INTERACTIVE_WINDOWS`,
+which isn't otherwise needed anywhere else in this service.
+
+Fixed by dropping class-name matching entirely: any `TYPE_WINDOW_STATE_CHANGED` event whose
+package is `com.android.systemui` triggers `dismissShade()`. This is broader than "only the shade,"
+but `performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)` is a documented no-op when the
+shade isn't open, so a false-positive trigger (e.g. some other SystemUI surface) costs nothing.
+Confirmed working end-to-end on-device.
+
 ---
 
 ## Risks / Technical Debt
@@ -289,4 +369,5 @@ The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast 
 | `DEBUGGING_GUIDE.md` references removed components | Low | References `OrientationLockActivity`, `ACTION_START`/`ACTION_STOP` (replaced by `ACTION_TOGGLE`). |
 | `README.md` lists "Orientation control" as a feature | Low | Feature was removed. README still lists it. |
 | Countdown coroutine is not tested in isolation | Medium | `startDelayedLock()` relies on `delay()` inside a `LifecycleCoroutineScope`. Tests would need `StandardTestDispatcher` + `advanceTimeBy()`. Current test coverage for countdown is unclear. |
-| `OverlayController` has no unit tests | Medium | Pure Android class (WindowManager). Would need Robolectric or instrumented tests. |
+| `SuppressionAllowlist` Settings/Clock resolution untested | Low | `Intent#resolveActivity()` can't be exercised in pure JVM unit tests (Android SDK stub method); only the own-package/emergency-package/dialer entries have test coverage. Verify the Settings and Clock apps actually resolve on-device. |
+| Snap-back relaunch may fight a foreground-service-restricted launcher on some OEMs | Low | `startActivity()` from an `AccessibilityService` should be exempt from Android's background-activity-launch restrictions, but this is unverified on-device across OEMs. |

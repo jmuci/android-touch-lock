@@ -7,6 +7,7 @@ import com.tenmilelabs.touchlock.domain.model.UsageTimerState
 import com.tenmilelabs.touchlock.domain.repository.ConfigRepository
 import com.tenmilelabs.touchlock.domain.repository.LockRepository
 import com.tenmilelabs.touchlock.domain.usecase.ObserveUsageTimerUseCase
+import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.NotificationPermissionManager
 import com.tenmilelabs.touchlock.platform.permission.OverlayPermissionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,12 +25,30 @@ class HomeViewModel @Inject constructor(
     private val configRepository: ConfigRepository,
     observeUsageTimer: ObserveUsageTimerUseCase,
     private val overlayPermissionManager: OverlayPermissionManager,
-    private val notificationPermissionManager: NotificationPermissionManager
+    private val notificationPermissionManager: NotificationPermissionManager,
+    private val accessibilityPermissionManager: AccessibilityPermissionManager
 ) : ViewModel() {
 
     // Private permission state flows
     private val _hasOverlayPermission = MutableStateFlow(overlayPermissionManager.hasPermission())
     private val _areNotificationsAvailable = MutableStateFlow(notificationPermissionManager.areNotificationsAvailable())
+    private val _isAccessibilityEnabled = MutableStateFlow(accessibilityPermissionManager.isEnabled())
+
+    // The positional `combine` overload maxes at 5 flows; group the permission flows into one
+    // nested combine first so the outer combine stays at 4.
+    private data class PermissionsSnapshot(
+        val hasOverlayPermission: Boolean,
+        val areNotificationsAvailable: Boolean,
+        val isAccessibilityEnabled: Boolean
+    )
+
+    private val permissions = combine(
+        _hasOverlayPermission,
+        _areNotificationsAvailable,
+        _isAccessibilityEnabled
+    ) { hasOverlayPermission, areNotificationsAvailable, isAccessibilityEnabled ->
+        PermissionsSnapshot(hasOverlayPermission, areNotificationsAvailable, isAccessibilityEnabled)
+    }
 
     /**
      * Single source of truth for UI state.
@@ -37,15 +56,15 @@ class HomeViewModel @Inject constructor(
      */
     val uiState: StateFlow<TouchLockUiState> = combine(
         lockRepository.observeLockState(),
-        _hasOverlayPermission,
-        _areNotificationsAvailable,
+        permissions,
         observeUsageTimer(),
         configRepository.observeDebugOverlayVisible()
-    ) { lockState, hasOverlayPermission, areNotificationsAvailable, usageTimer, debugOverlayVisible ->
+    ) { lockState, permissions, usageTimer, debugOverlayVisible ->
         TouchLockUiState(
             lockState = lockState,
-            hasOverlayPermission = hasOverlayPermission,
-            areNotificationsAvailable = areNotificationsAvailable,
+            hasOverlayPermission = permissions.hasOverlayPermission,
+            areNotificationsAvailable = permissions.areNotificationsAvailable,
+            isAccessibilityEnabled = permissions.isAccessibilityEnabled,
             usageTimer = usageTimer,
             debugOverlayVisible = debugOverlayVisible
         )
@@ -66,6 +85,7 @@ class HomeViewModel @Inject constructor(
     fun refreshPermissionState() {
         _hasOverlayPermission.value = overlayPermissionManager.hasPermission()
         _areNotificationsAvailable.value = notificationPermissionManager.areNotificationsAvailable()
+        _isAccessibilityEnabled.value = accessibilityPermissionManager.isEnabled()
         lockRepository.restoreNotification()
     }
 

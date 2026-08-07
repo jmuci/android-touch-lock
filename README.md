@@ -39,8 +39,10 @@ The app works fully **offline** and does not require an account or network acces
 |---------|---------------|-------------------|
 | ![Main UI](docs/screenshots/main_ui.png) | ![Unlock Handle](docs/screenshots/unlock_handle.png) | ![Notification Lock](docs/screenshots/notification_lock.png) |
 
-> Touch Lock does **not** attempt to be a full parental control or kiosk app.
-> It focuses on a single, well-defined problem: temporarily disabling touch input.
+> Touch Lock does **not** attempt to be a full parental control or kiosk app — there's no device-owner
+> mode, no app blocking, no remote management. It focuses on one well-defined problem: temporarily
+> disabling touch input, with an optional Strong Lock mode that narrows (but does not eliminate) a few
+> specific escape routes.
 
 ---
 
@@ -56,23 +58,40 @@ The app works fully **offline** and does not require an account or network acces
 
 5. Usage resets automatically at midnight
 
-> **Known limitations**: 
+> **Known limitations** (default mode — touch overlay only):
 > - Gestures on the system UI (drag the notifications bar or press on the navigation menu)
 > - Some video call apps (e.g. WhatsApp) may automatically minimize
 > the call to picture-in-picture when touch locking is enabled. This behavior is
 > controlled by the calling app and cannot be overridden safely by Touch Lock.
+>
+> An optional **Strong Lock** mode (see below) narrows the first limitation: it blocks navigation bar
+> taps and auto-dismisses the notification shade while locked. It does not make the app unescapable —
+> on gesture-navigation devices, back/home/recents swipes are not blocked, only reacted to (the
+> protected app is relaunched near-instantly if the user swipes away). Shade auto-dismiss additionally
+> requires Android 12 (API 31) or higher — the platform API it relies on doesn't exist on older
+> versions. On Android 8–11, Strong Lock still blocks the navigation bar and snaps back, but the
+> shade itself stays open if pulled down.
 
 ---
 
 ## What This App Does _Not_ Do (by Design)
 
-- It does **not** monitor or inspect other apps' UI
+- It does **not** collect usage data or analytics, and nothing leaves the device — in either mode below
 
-- It does **not** collect usage data or analytics
+- It does **not** introduce kiosk mode, device owner APIs, or system gesture blocking
 
-- It does **not** block system gestures (e.g. notification shade, status bar)
+- In its **default mode**, it does **not** require Accessibility services, does not monitor other apps'
+  UI, and does not block system gestures (e.g. notification shade, status bar)
 
-- It does **not** require Accessibility services
+- An optional **Strong Lock** mode (off by default) uses an Android Accessibility service, scoped
+  narrowly to parental-supervision lock enforcement:
+  - It receives window-change events carrying the **foreground app's package name** — never screen
+    content — to block navigation bar taps and relaunch the protected app if the user navigates away
+    while locked
+  - It never reads, records, or transmits what's on screen
+  - It never occludes the status bar or its privacy/camera/mic/cast indicators
+  - It requires an explicit, dedicated in-app disclosure and consent before enabling — declining leaves
+    the app exactly as it works in default mode
 
 
 These constraints are intentional and align with Android platform and Play Store best practices.
@@ -143,7 +162,16 @@ Touch Lock requests:
 - `POST_NOTIFICATIONS` – Required to show the persistent notification
 - `VIBRATE` – Haptic feedback on lock/unlock
 
-No user data is collected. No network access. No data leaves the device.
+**Optional** — only if you enable Strong Lock mode:
+
+- An Accessibility service (enabled via Android Settings, not a manifest-granted permission) – used
+  exclusively for parental-supervision lock enforcement: blocking navigation bar taps and relaunching
+  the protected app if you navigate away while locked. Reading window-change events (foreground package
+  name only, never screen content) is the extent of what this service does. Shown to you via a
+  dedicated in-app disclosure screen before you're taken to Settings to enable it; declining leaves the
+  app working exactly as it does without it.
+
+No user data is collected. No network access. No data leaves the device — in either mode.
 
 ---
 

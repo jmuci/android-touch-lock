@@ -5,6 +5,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Strong Lock (accessibility) needs to see other launchable apps: snap-back relaunches
+         whatever app was protected via getLaunchIntentForPackage(), and SuppressionAllowlist
+         resolves the device's actual Settings/Clock apps. Without this, package-visibility
+         filtering (targetSdk 30+) makes those PackageManager queries return null/empty for any
+         app outside a narrow implicitly-visible set. Scoped to LAUNCHER apps only — not
+         QUERY_ALL_PACKAGES — matching the actual need (only ever acts on apps the user opened). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TouchLockApp"
         android:allowBackup="true"
@@ -32,6 +46,18 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Touch input overlay management" />
+        </service>
+
+        <service
+            android:name=".platform.accessibility.TouchLockAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
         </service>
     </application>
 </manifest>
