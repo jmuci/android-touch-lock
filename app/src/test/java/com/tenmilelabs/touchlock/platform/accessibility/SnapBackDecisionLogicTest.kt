@@ -300,6 +300,21 @@ class SnapBackDecisionLogicTest {
     }
 
     @Test
+    fun `an attempt exactly at the window boundary still counts toward the limit`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 at t=0
+
+        // Exactly the window width, not past it — pruning requires strictly *greater than* the
+        // window (see performSnapBack's `now - snapBackTimestamps.first() > ...`), so the first
+        // attempt is still in-window here and this is the 4th surviving entry, not a fresh 1st.
+        harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
+        harness.onWindowStateChanged("com.launcher")
+
+        assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    @Test
     fun `attempts older than the window drop out of the count`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
@@ -477,5 +492,24 @@ class SnapBackDecisionLogicTest {
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.protected.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `shade dismissals never consume from the snap-back rate-limit budget, even interleaved with real snap-backs`() {
+        val harness = Harness(isLocked = true)
+        harness.setLocked(true)
+
+        // 3 real snap-backs, each preceded by a shade dismissal that must not itself count —
+        // these are two independent mechanisms (dismissShade's grace window vs performSnapBack's
+        // rate-limit window) and a dismissal returns before ever reaching performSnapBack, so it
+        // must never inflate snapBackCount.
+        repeat(3) {
+            harness.dismissShade()
+            harness.currentElapsedMillis += 1600L // past the 1500ms shade-dismiss grace window
+            harness.onWindowStateChanged("com.launcher")
+        }
+
+        assertThat(harness.snapBackCount).isEqualTo(3)
+        assertThat(harness.forceUnlockTriggered).isFalse()
     }
 }
