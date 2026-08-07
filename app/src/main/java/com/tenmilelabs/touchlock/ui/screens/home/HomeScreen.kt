@@ -205,6 +205,12 @@ internal fun HomeScreenContent(
 
         // Add bottom spacing for better visual balance
         Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = stringResource(R.string.build_version_footnote, BuildConfig.GIT_COMMIT_HASH),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

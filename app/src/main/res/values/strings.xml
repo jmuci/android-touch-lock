@@ -4,6 +4,7 @@
     <!-- Home Screen -->
     <string name="home_title">Touch Lock App</string>
     <string name="home_description">Screen lock app for safe usage for kids or to prevent accidental touches.</string>
+    <string name="build_version_footnote">Build %1$s</string>
     <string name="permission_message">Touch Lock needs permission to draw over other apps in order to block touch input.</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="lock_in_10s">Lock in 10s</string>
