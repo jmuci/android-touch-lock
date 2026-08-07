@@ -35,4 +35,17 @@ class AccessibilityServiceHolderTest {
         assertThat(holder.isConnected.value).isFalse()
         assertThat(holder.currentService()).isNull()
     }
+
+    @Test
+    fun `attaching again without an intervening detach overwrites the held service and stays connected`() {
+        val holder = AccessibilityServiceHolder()
+        val first = mockk<TouchLockAccessibilityService>(relaxed = true)
+        val second = mockk<TouchLockAccessibilityService>(relaxed = true)
+        holder.attach(first)
+
+        holder.attach(second)
+
+        assertThat(holder.isConnected.value).isTrue()
+        assertThat(holder.currentService()).isSameInstanceAs(second)
+    }
 }

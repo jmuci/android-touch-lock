@@ -15,7 +15,7 @@ import com.tenmilelabs.touchlock.domain.model.UsageTimerState
  * @property lockState Current lock state from the service
  * @property hasOverlayPermission Whether SYSTEM_ALERT_WINDOW permission is granted
  * @property areNotificationsAvailable Whether notifications are enabled and visible
- * @property isAccessibilityEnabled Whether the optional Strong Lock accessibility service is enabled
+ * @property isAccessibilityEnabled Whether the optional Toddler-Proof Lock accessibility service is enabled
  * @property usageTimer Daily usage timer state
  * @property debugOverlayVisible Debug-only: Whether overlay has visible tint for lifecycle debugging
  */
