@@ -284,7 +284,9 @@ class HomeScreenTest {
             usageTimer = UsageTimerState(elapsedMillisToday = 0L, isRunning = false),
         )
 
-        composeTestRule.onNodeWithText("Time locked today").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Time locked today")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -295,14 +297,18 @@ class HomeScreenTest {
             usageTimer = UsageTimerState(elapsedMillisToday = 125_000L, isRunning = false),
         )
 
-        composeTestRule.onNodeWithText("2m 5s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2m 5s")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
     fun usageTimerCard_showsZeroTimeOnInitialState() {
         setContent(usageTimer = UsageTimerState.INITIAL)
 
-        composeTestRule.onNodeWithText("0m 0s").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0m 0s")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     // ---------------------------------------------------------------------------
