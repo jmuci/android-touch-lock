@@ -36,8 +36,7 @@ class SnapBackDecisionLogicTest {
         /**
          * Mirrors [TouchLockAccessibilityService.lastKnownForegroundPackage] — continuously
          * updated from every window-state event regardless of lock state, filtered through
-         * [isEligibleProtectedCandidate] (`onAccessibilityEvent()`'s unconditional capture, not
-         * the reconnect-race adoption below).
+         * [isEligibleProtectedCandidate] (`onAccessibilityEvent()`'s unconditional capture).
          */
         var lastKnownForegroundPackage: String? = null
             private set
@@ -81,7 +80,8 @@ class SnapBackDecisionLogicTest {
         fun setLocked(locked: Boolean, knownForegroundPackage: String? = "com.protected.app") {
             if (locked && protectedPackageName == null) {
                 // Mirrors onServiceConnected()'s capture: uses whatever was last observed, which
-                // can be null if the service (re)connected right as the lock engaged.
+                // can be null if the service (re)connected right as the lock engaged, or if the
+                // lock engaged while our own app (never eligible) was the only thing seen so far.
                 protectedPackageName = knownForegroundPackage
                 snapBackTimestamps.clear()
             } else if (!locked) {
@@ -101,15 +101,9 @@ class SnapBackDecisionLogicTest {
             // runs before the lock-state check.
             currentForegroundPackage = eventPackage
             if (!isLocked) return
-            // Edge case fix: adopt the first eligible package observed while locked if the
-            // lock-engagement capture raced and came up null, instead of leaving snap-back
-            // disabled all session. Never adopt SystemUI/allowlisted packages this way.
-            if (protectedPackageName == null) {
-                if (isEligibleProtectedCandidate(eventPackage)) {
-                    protectedPackageName = eventPackage
-                }
-                return
-            }
+            // No protected package was captured at lock-engagement time — nothing to compare
+            // against or snap back to for the rest of this session. Deliberately does not adopt
+            // whatever shows up next; see the equivalent comment in production.
             val protected = protectedPackageName ?: return
             if (eventPackage in allowlisted) return
             if (eventPackage != protected) {
@@ -343,59 +337,54 @@ class SnapBackDecisionLogicTest {
         assertThat(harness.forceUnlockTriggered).isFalse()
     }
 
-    // --- Reconnect race: protected package captured as unknown at lock-engagement time ---
+    // --- Protected package unknown at lock-engagement time (reconnect race, or the lock engaging
+    // while our own app — never eligible — was the only thing seen this session) ---
+    //
+    // On-device bug found via manual testing: engaging Strong Lock via the in-app "Lock in 10s"
+    // button without switching away first (so our own, allowlisted, package is the only thing
+    // ever observed) captured a null protected package, same as the reconnect race below. The
+    // *previous* fix for that adopted whatever window-state event arrived next as "protected" —
+    // but the very next event is exactly as likely to be the user's real escape attempt (e.g.
+    // pressing Home) as it is to be the still-current app after a reconnect. On-device, that meant
+    // pressing Home right after locking silently adopted the launcher as "protected" and never
+    // snapped back at all. Failing to protect anything for a session with no known target is safer
+    // than protecting the wrong one for the rest of it.
 
     @Test
-    fun `adopts the first observed package when locked with an unknown protected package`() {
+    fun `does not snap back for the rest of the session when the protected package is unknown at lock time`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true, knownForegroundPackage = null)
 
-        harness.onWindowStateChanged("com.was.in.foreground")
+        harness.onWindowStateChanged("com.launcher") // the on-device repro: pressing Home right after locking
 
+        assertThat(harness.protectedPackageName).isNull()
         assertThat(harness.lastRelaunchedPackage).isNull()
         assertThat(harness.snapBackCount).isEqualTo(0)
     }
 
     @Test
-    fun `snaps back correctly on subsequent events after adopting an unknown protected package`() {
+    fun `does not adopt a later event as protected even after several window-state changes`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true, knownForegroundPackage = null)
+
         harness.onWindowStateChanged("com.was.in.foreground")
-
         harness.onWindowStateChanged("com.launcher")
+        harness.onWindowStateChanged("com.other.app")
 
-        assertThat(harness.lastRelaunchedPackage).isEqualTo("com.was.in.foreground")
-        assertThat(harness.snapBackCount).isEqualTo(1)
-    }
-
-    // --- SystemUI must never be adopted as the protected package ---
-    //
-    // Codex review finding: pulling the shade (e.g. from the persistent notification) right as
-    // the lock engages, or right as a mid-lock accessibility reconnect races the capture, could
-    // adopt "com.android.systemui" as the protected package. It has no launch intent, so every
-    // subsequent real app switch reads as "navigation away" and snap-back silently fails for the
-    // rest of the session.
-
-    @Test
-    fun `does not adopt SystemUI as the protected package during the reconnect race`() {
-        val harness = Harness(isLocked = true)
-        harness.setLocked(true, knownForegroundPackage = null)
-
-        harness.onWindowStateChanged(Harness.SYSTEM_UI_PACKAGE)
         assertThat(harness.protectedPackageName).isNull()
-
-        harness.onWindowStateChanged("com.real.app")
-        assertThat(harness.protectedPackageName).isEqualTo("com.real.app")
+        assertThat(harness.snapBackCount).isEqualTo(0)
     }
 
     @Test
-    fun `snaps back to the correctly-adopted package, never to SystemUI`() {
+    fun `a fresh lock cycle with a known foreground package recovers snap-back`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true, knownForegroundPackage = null)
-        harness.onWindowStateChanged(Harness.SYSTEM_UI_PACKAGE) // fails to adopt
-        harness.onWindowStateChanged("com.real.app") // adopts as protected
+        harness.onWindowStateChanged("com.launcher") // ignored — no protected package this session
+        harness.setLocked(false)
 
-        harness.onWindowStateChanged("com.launcher") // real navigation away
+        harness.observeWindowState("com.real.app")
+        harness.setLocked(true, knownForegroundPackage = harness.lastKnownForegroundPackage)
+        harness.onWindowStateChanged("com.launcher")
 
         assertThat(harness.lastRelaunchedPackage).isEqualTo("com.real.app")
         assertThat(harness.snapBackCount).isEqualTo(1)
