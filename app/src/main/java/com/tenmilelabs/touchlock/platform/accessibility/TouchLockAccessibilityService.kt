@@ -38,8 +38,10 @@ class TouchLockAccessibilityService : AccessibilityService() {
 
     // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
     // package in the foreground at the moment the lock engages is known. Deliberately filtered:
-    // only packages eligible to *be* the protected app land here. Do not read it to answer "what
-    // is in front right now" — use [currentForegroundPackage] for that.
+    // only packages eligible to *be* the protected app land here — critically, this is what keeps
+    // SystemUI from overwriting it when the shade is pulled right before locking (e.g. from the
+    // persistent notification). Do not read it to answer "what is in front right now" — use
+    // [currentForegroundPackage] for that.
     private var lastKnownForegroundPackage: String? = null
 
     // Every package seen in a window-state event, unfiltered — including SystemUI and allowlisted
@@ -49,8 +51,11 @@ class TouchLockAccessibilityService : AccessibilityService() {
     // read this instead, or the allowlist escape hatch silently does nothing.
     private var currentForegroundPackage: String? = null
 
-    // Captured when the lock engages; cleared when it releases. Null means "no active lock
-    // session" and is itself part of the fail-open guard below.
+    // Captured when the lock engages; cleared when it releases. Null means either "no active lock
+    // session" or "no eligible app was ever seen in the foreground this session to protect" (e.g.
+    // the lock engaged while our own app — allowlisted — was still on screen, and no other app was
+    // visited first). Both are treated the same by the fail-open guard in onAccessibilityEvent:
+    // nothing to snap back to.
     private var protectedPackageName: String? = null
 
     // Timestamps (elapsedRealtime) of recent snap-back relaunches, oldest first. Confirmed
@@ -113,17 +118,15 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // and could be briefly stale for one event-loop turn after unlock.
         if (LockOverlayService.lockState.value != LockState.Locked) return
 
-        // Edge case: if the service (re)connects — e.g. Task 4's mid-lock recovery, or the user
-        // re-enabling accessibility — while already Locked, the Unlocked->Locked capture in
-        // onServiceConnected() can race ahead of the first window-state event and capture null.
-        // Adopt the first package observed while locked as the protected one instead of leaving
-        // snap-back permanently disabled for the rest of the session.
-        if (protectedPackageName == null) {
-            if (isEligibleProtectedCandidate(eventPackage)) {
-                protectedPackageName = eventPackage
-            }
-            return
-        }
+        // No eligible app was captured as the protected package when the lock engaged (see the
+        // collector in onServiceConnected()) — nothing to compare against or snap back to for the
+        // rest of this session. Deliberately does not adopt whatever shows up next as the
+        // protected package the way this used to: that event could just as easily be the user's
+        // actual escape attempt (e.g. pressing Home right after locking while still inside our own
+        // app, which has no eligible foreground package to capture in the first place) as it could
+        // be the still-current app after a reconnect, and there's no reliable way to tell the two
+        // apart from here. Failing to protect anything this session is safer than protecting the
+        // wrong package for the rest of it.
         val protected = protectedPackageName ?: return
 
         // Never suppress, never snap away from, an allowlisted package (Settings, dialer, alarm,

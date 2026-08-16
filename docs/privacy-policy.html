@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touch Lock — Privacy Policy</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1a1a1a;
+    --bg: #ffffff;
+    --muted: #555;
+    --rule: #e2e2e2;
+    --accent: #3355dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #eaeaea;
+      --bg: #121212;
+      --muted: #a8a8a8;
+      --rule: #2c2c2c;
+      --accent: #7d9dff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+  }
+  .updated {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-size: 1.15rem;
+    margin-top: 40px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+  }
+  p, li { color: var(--fg); }
+  ul { padding-left: 1.2em; }
+  a { color: var(--accent); }
+  .summary {
+    padding: 16px 20px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+  footer {
+    margin-top: 56px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Touch Lock — Privacy Policy</h1>
+  <p class="updated">Last updated: August 7, 2026</p>
+
+  <div class="summary">
+    <p><strong>Summary:</strong> Touch Lock works entirely offline. We do not collect, store,
+    transmit, or share any personal data, usage data, or analytics. There are no user accounts,
+    no ads, and no third-party SDKs of any kind.</p>
+  </div>
+
+  <h2>What Touch Lock is</h2>
+  <p>Touch Lock is a parenting-control utility for Android. It's downloaded, installed, and
+  configured by a parent or guardian to temporarily block touch input on a device — for example,
+  handing a phone to a young child to watch a video, or preventing accidental taps during a video
+  call — while keeping whatever's on screen fully visible.</p>
+
+  <h2>Permissions and what they're for</h2>
+  <ul>
+    <li><strong>Display over other apps (<code>SYSTEM_ALERT_WINDOW</code>)</strong> — required to
+      draw the touch-blocking overlay on top of whatever app is open. The overlay is rendered
+      entirely on-device; nothing about the app underneath it is read, recorded, or transmitted.</li>
+    <li><strong>Foreground service</strong> — keeps the lock active and shows a persistent
+      notification while Touch Lock is running, as Android requires for any app doing ongoing
+      background work.</li>
+    <li><strong>Post notifications</strong> — required to show the lock/unlock notification.</li>
+    <li><strong>Vibrate</strong> — haptic feedback on lock/unlock. No data involved.</li>
+    <li><strong>Accessibility service (optional — "Toddler-Proof Lock")</strong> — off by default,
+      and only active if a parent explicitly enables it via a dedicated in-app disclosure screen.
+      While active, it receives window-change events containing only the <strong>package name</strong>
+      of the app currently in the foreground (for example, <code>com.google.android.youtube</code>)
+      — never text, images, or any other on-screen content. This is used solely to detect when the
+      device has navigated away from the protected app while locked, so Touch Lock can bring it
+      back to the front, and to block accidental taps on the navigation bar while locked. This
+      information is processed entirely on-device in real time, is never stored beyond the current
+      lock session, never transmitted off-device, and never shared with any third party. This
+      service is not a tool for users with disabilities and is not declared as one.</li>
+  </ul>
+
+  <h2>Data we do not collect</h2>
+  <p>We do not collect your name, email, location, contacts, photos, files, browsing history, or
+  any analytics or usage statistics. The app makes no network requests of any kind — Touch Lock
+  has no server, no backend, and no internet permission to use even if it wanted to.</p>
+
+  <h2>Data stored on your device</h2>
+  <p>Touch Lock stores a small amount of local, on-device configuration (via Android DataStore):
+  how long the lock has been active today (resets daily) and whether Toddler-Proof Lock is
+  enabled. This data never leaves the device and is deleted when the app is uninstalled.</p>
+
+  <h2>Children's privacy</h2>
+  <p>Touch Lock is intended to be downloaded, installed, and configured by an adult — it is a tool
+  <em>for</em> parents and guardians, not an app directed at children. We do not knowingly collect
+  data from anyone, children included, since we do not collect data at all.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the "Last updated" date above will change accordingly.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or the app can be sent to
+    <a href="mailto:jm.mucientes.fayos@gmail.com">jm.mucientes.fayos@gmail.com</a>,
+    or filed as an issue on
+    <a href="https://github.com/jmuci/android-touch-lock">the GitHub repository</a>.</p>
+
+  <footer>Touch Lock is developed by Jose M Mucientes.</footer>
+</main>
+</body>
+</html>

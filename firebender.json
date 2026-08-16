@@ -23,7 +23,7 @@
     "All UI actions must flow through ViewModels, use cases, and repositories.",
     "A foreground service owns the overlay lifecycle and is the single source of truth for lock state.",
     "Lock state must be exposed using StateFlow.",
-    "Do not introduce Accessibility services or Accessibility permissions unless explicitly instructed.",
+    "An AccessibilityService is permitted only for the optional 'Strong Lock' parental-supervision lock enforcement (input suppression + nav-bar overlay while locked). It must never read, record, or exfiltrate screen content, must never set isAccessibilityTool=true, and must stay optional with graceful degradation. Do not introduce any other accessibility-service use case without explicit instruction.",
     "Do not introduce kiosk mode, device owner APIs, or system gesture blocking.",
     "Overlay permission (SYSTEM_ALERT_WINDOW) must be checked before attempting to show any overlay.",
     "The app must fail safely if overlay permission is missing and must never crash.",
