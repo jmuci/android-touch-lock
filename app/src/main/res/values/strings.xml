@@ -56,6 +56,8 @@
     <string name="strong_lock_disclosure_data_body">While active, the service receives window-change events containing the package name of the app currently in the foreground (for example, \"com.google.android.youtube\"). It does not read text, images, or any other on-screen content, and it does not require touch-exploration or screen-content access.</string>
     <string name="strong_lock_disclosure_sharing_title">How it\'s used and shared</string>
     <string name="strong_lock_disclosure_sharing_body">This information is used only to keep the protected app in front while Touch Lock is active. It is processed entirely on your device and is never transmitted, stored remotely, or shared with anyone.</string>
+    <string name="strong_lock_disclosure_shortcut_title">One more thing</string>
+    <string name="strong_lock_disclosure_shortcut_body">On the next screen, turn on the main toggle only. Skip \"Shortcut\" — enabling it would let Touch Lock be turned off with a quick volume-button press, defeating the point of Toddler-Proof Lock.</string>
     <string name="strong_lock_disclosure_decline">Not now</string>
     <string name="strong_lock_disclosure_continue">Continue to Settings</string>
 </resources>
