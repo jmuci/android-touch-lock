@@ -437,7 +437,7 @@ class HomeScreenTest {
             onContinueToSettings = { continueInvoked = true },
         )
 
-        composeTestRule.onNodeWithTag("disclosure_decline_button").performClick()
+        composeTestRule.onNodeWithTag("disclosure_decline_button").performScrollTo().performClick()
 
         assert(declineInvoked) { "Expected onDecline to be invoked" }
         assert(!continueInvoked) { "onContinueToSettings must never be invoked by declining" }
@@ -452,7 +452,7 @@ class HomeScreenTest {
             onContinueToSettings = { continueInvoked = true },
         )
 
-        composeTestRule.onNodeWithTag("disclosure_continue_button").performClick()
+        composeTestRule.onNodeWithTag("disclosure_continue_button").performScrollTo().performClick()
 
         assert(continueInvoked) { "Expected onContinueToSettings to be invoked" }
         assert(!declineInvoked) { "onDecline must not be invoked by continuing" }

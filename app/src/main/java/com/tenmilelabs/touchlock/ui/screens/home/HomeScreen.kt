@@ -425,6 +425,16 @@ fun AccessibilityDisclosureScreen(
                 style = MaterialTheme.typography.bodyMedium
             )
 
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_shortcut_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_shortcut_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
