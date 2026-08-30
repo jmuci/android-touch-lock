@@ -43,7 +43,7 @@
     <string name="unlock_handle_press_and_hold_to_unlock">Press and\nhold to\nunlock</string>
 
     <!-- Strong Lock (accessibility) -->
-    <string name="accessibility_service_description">Used only while Touch Lock is active, to block navigation bar taps and bring the protected app back to the front if you navigate away. Never reads or shares what\'s on your screen.</string>
+    <string name="accessibility_service_description">Used only while Touch Lock is active, to block navigation bar taps, dismiss an opened notification shade, and bring the protected app back to the front if you navigate away. Never reads or shares what\'s on your screen.</string>
 
     <string name="strong_lock_upsell_title">Toddler-Proof Lock available</string>
     <string name="strong_lock_upsell_description">Also block navigation bar taps and auto-return to the locked app if it\'s swiped away. Optional, off by default.</string>
@@ -51,7 +51,7 @@
 
     <string name="strong_lock_disclosure_title">Turn on Toddler-Proof Lock?</string>
     <string name="strong_lock_disclosure_what_it_does_title">What Toddler-Proof Lock does</string>
-    <string name="strong_lock_disclosure_what_it_does_body">Toddler-Proof Lock uses an Android Accessibility service to reinforce Touch Lock while it\'s active: it blocks taps on the navigation bar (Home, Back, Recents) and brings the protected app back to the front if it\'s navigated away from.</string>
+    <string name="strong_lock_disclosure_what_it_does_body">Toddler-Proof Lock uses an Android Accessibility service to reinforce Touch Lock while it\'s active: it blocks taps on the navigation bar (Home, Back, Recents), closes the notification shade if it\'s pulled down, and brings the protected app back to the front if it\'s navigated away from.</string>
     <string name="strong_lock_disclosure_data_title">What data it accesses</string>
     <string name="strong_lock_disclosure_data_body">While active, the service receives window-change events containing the package name of the app currently in the foreground (for example, \"com.google.android.youtube\"). It does not read text, images, or any other on-screen content, and it does not require touch-exploration or screen-content access.</string>
     <string name="strong_lock_disclosure_sharing_title">How it\'s used and shared</string>
