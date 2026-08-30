@@ -227,6 +227,27 @@ Two gitignored, per-checkout files must exist before a release build works:
    `main` — the `Deploy Pages` GitHub Actions workflow redeploys it automatically
    (`.github/workflows/pages.yml`).
 
+### Crash symbolication (deobfuscating errors in Play Console)
+
+No manual upload step needed — both are handled automatically for `.aab` uploads on the AGP
+version this project uses (8.13+):
+
+- **Java/Kotlin (R8/ProGuard)**: `bundleRelease` embeds the mapping file directly in the bundle
+  (`BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`, verified present in the
+  built `.aab`). Play Console grabs it automatically — Android vitals crash/ANR reports show
+  real class and method names, not obfuscated ones, with no action required per release.
+- **Native (NDK) crashes**: `app/build.gradle.kts` sets `ndk.debugSymbolLevel = "FULL"` on the
+  release build type, so if this app ever ships its own native code (or a dependency starts
+  shipping `.so` files with embedded debug info), the symbols are packaged into the bundle
+  automatically the same way. As of this writing the app has no native code of its own — the two
+  `.so` files pulled in transitively (`androidx.graphics.path`, DataStore's shared counter) are
+  vendor-shipped and already stripped, so there's currently nothing to extract. The setting is
+  a correct no-cost default regardless: it costs nothing when there's nothing to embed, and needs
+  no future action if that ever changes.
+
+If you ever need to manually inspect or re-download either file for a past release: Play Console
+→ **Test and release → App bundle explorer** → select the version → **Downloads** tab → **Assets**.
+
 ---
 
 ## Disclaimer

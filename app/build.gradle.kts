@@ -67,6 +67,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Bundled into the .aab automatically (AGP 4.1+) so Play Console can symbolicate
+            // native crashes in bundled .so libraries (e.g. androidx.graphics.path,
+            // datastore's shared counter) — no separate upload needed, and end users never
+            // receive these symbols since Play strips them from the APKs it actually serves.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
