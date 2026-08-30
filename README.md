@@ -175,6 +175,60 @@ No user data is collected. No network access. No data leaves the device — in e
 
 ---
 
+## Release Process
+
+Recipe for shipping a new version to Google Play. For the one-time initial-launch setup
+(account creation, closed testing, permission declarations), see
+[docs/PLAY_STORE_LAUNCH.md](docs/PLAY_STORE_LAUNCH.md) instead — this section is the repeatable
+steps for every release after that.
+
+### Prerequisites (local machine only, not checked into git)
+
+Two gitignored, per-checkout files must exist before a release build works:
+
+- **`local.properties`** — `sdk.dir=<path to your Android SDK>` (Android Studio generates this
+  automatically; if you're building from a fresh clone/worktree without it, create it yourself)
+- **`keystore.properties`** — points at the upload keystore and its passwords (see
+  `keystore.properties.example` for the format). The keystore itself lives outside the repo
+  (`~/Keys/touchlock/touchlock-upload.jks` on the primary dev machine) and is backed up in Bitwarden —
+  **never regenerate it**; losing it means a Play Console key-reset request with real downtime.
+
+### Steps
+
+1. **Bump the version** in `app/build.gradle.kts`:
+   ```kotlin
+   versionCode = <increment by 1>
+   versionName = "<semantic version, e.g. 1.1>"
+   ```
+2. **Build the signed release bundle:**
+   ```bash
+   ./gradlew bundleRelease
+   ```
+   Output: `app/build/outputs/bundle/release/app-release.aab`
+3. **Verify it's actually signed** (a missing/misconfigured `keystore.properties` fails silently
+   rather than erroring the build):
+   ```bash
+   jarsigner -verify -verbose -certs app/build/outputs/bundle/release/app-release.aab
+   ```
+   Look for `jar verified` and a certificate referencing the `touchlock-upload` alias.
+4. **Tag the release commit** so any past build is reproducible from source:
+   ```bash
+   git tag v<versionName>-vc<versionCode>
+   git push origin v<versionName>-vc<versionCode>
+   ```
+5. **Upload in Play Console**: Testing → Internal testing → Create release → upload the `.aab` →
+   add release notes → roll out. Internal testing has no review wait and is the fastest way to
+   confirm the artifact installs and works.
+6. **Promote, don't re-upload**, once verified: open the release's details page and use
+   **Promote release** to push the same artifact to Closed testing / Production. Re-uploading the
+   same `.aab` to a different track from scratch will fail — Play Console treats each versionCode
+   as a single artifact shared across tracks.
+7. **If store copy, screenshots, or the privacy policy changed**, update `website/` and push to
+   `main` — the `Deploy Pages` GitHub Actions workflow redeploys it automatically
+   (`.github/workflows/pages.yml`).
+
+---
+
 ## Disclaimer
 
 Touch Lock is intended for **temporary, supervised use**.
