@@ -1,6 +1,7 @@
 package com.tenmilelabs.touchlock.ui.screens.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,10 +31,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -110,6 +113,8 @@ internal fun HomeScreenContent(
     onLearnAboutStrongLock: () -> Unit,
     onDebugOverlayVisibleChanged: (Boolean) -> Unit
 ) {
+    val uriHandler = LocalUriHandler.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -215,8 +220,21 @@ internal fun HomeScreenContent(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Text(
+            text = stringResource(R.string.privacy_policy_link),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clickable { uriHandler.openUri(PRIVACY_POLICY_URL) }
+                .testTag("privacy_policy_link")
+        )
     }
 }
+
+private const val PRIVACY_POLICY_URL = "https://jmuci.github.io/android-touch-lock/privacy-policy.html"
 
 
 @Composable
