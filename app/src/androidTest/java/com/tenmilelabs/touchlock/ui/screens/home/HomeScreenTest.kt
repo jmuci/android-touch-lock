@@ -409,8 +409,9 @@ class HomeScreenTest {
         composeTestRule.onNodeWithText("What Toddler-Proof Lock does").assertIsDisplayed()
         composeTestRule.onNodeWithText(
             "Toddler-Proof Lock uses an Android Accessibility service to reinforce Touch Lock " +
-                "while it's active: it blocks taps on the navigation bar (Home, Back, Recents) " +
-                "and brings the protected app back to the front if it's navigated away from."
+                "while it's active: it blocks taps on the navigation bar (Home, Back, Recents), " +
+                "closes the notification shade if it's pulled down, and brings the protected " +
+                "app back to the front if it's navigated away from."
         ).assertIsDisplayed()
     }
 
