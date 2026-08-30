@@ -11,9 +11,6 @@
 # Hide the original source file name.
 -renamesourcefileattribute SourceFile
 
-# Keep domain models (enums, sealed interfaces, data classes)
--keep class com.tenmilelabs.touchlock.domain.model.** { *; }
-
 # Keep service actions (referenced by string in intents)
 -keep class com.tenmilelabs.touchlock.service.LockOverlayService {
     public static final java.lang.String ACTION_*;
