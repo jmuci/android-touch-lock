@@ -44,7 +44,7 @@ skipped or expedited. (**Corrected 2026-08-30**: this used to be 20 testers — 
 | # | Finding | Why it matters | Fix |
 |---|---------|-----------------|-----|
 | B1 | No release `signingConfig` in `app/build.gradle.kts` | `./gradlew bundleRelease` today has nothing to sign the AAB with — you'll hit this the first time you try to produce a release build | Gradle wiring done (2026-08-07). **Still open as of 2026-08-30**: no `keystore.properties` or keystore file found in this worktree or `~/Keys/` — you still need to run §1.4 yourself in your own terminal |
-| B2 | No hosted Privacy Policy URL | Mandatory for any app that requests a sensitive permission (Accessibility qualifies) and for the Data Safety section — Play Console will not let you publish without one | Policy written to `docs/privacy-policy.html` (2026-08-07). **Still open as of 2026-08-30**: confirmed live-checked `https://jmuci.github.io/android-touch-lock/privacy-policy.html` — currently 404s, GitHub Pages is not yet enabled for this repo. Enable it yourself (Settings → Pages → Source: `main` branch, `/docs` folder), or ask me to do it via `gh api` and I'll confirm with you first since it makes the repo's Pages site public |
+| B2 | No hosted Privacy Policy URL | Mandatory for any app that requests a sensitive permission (Accessibility qualifies) and for the Data Safety section — Play Console will not let you publish without one | Policy now lives at `website/privacy-policy.html` (moved 2026-08-30, alongside the new promo site — see §3.2). **Still open**: confirmed live-checked `https://jmuci.github.io/android-touch-lock/privacy-policy.html` — currently 404s, GitHub Pages is not yet enabled for this repo. A `.github/workflows/pages.yml` workflow now deploys `website/` to Pages on every push to `main`; you still need to enable Pages itself once (Settings → Pages → Source: **GitHub Actions**), or ask me to do it via `gh api` and I'll confirm with you first since it makes the repo's Pages site public |
 | B3 | Accessibility Permission Declaration Form not yet filed | Any app declaring `BIND_ACCESSIBILITY_SERVICE` gets routed through Play's Permissions Declaration Form during review; undeclared/unjustified use is a common auto-rejection reason. **Confirmed 2026-08-30 against current Play policy**: since Touch Lock is not a disability accessibility tool, it goes through the *non-accessibility-tool* declaration path (reason = "app functionality") — this is the correct path and is a legitimate, commonly-approved one (call-blocking, parental-control, and password-manager apps all use it), not a mismatch. See §1.5 for the residual risk and how to write the justification to minimize it | Justification text in §3.3, updated to lead with "no alternative API exists" framing (technical necessity, not convenience) — paste into the form. Needs the screen recording from B4 |
 | B4 | No screen-recording demo of Strong Lock for the declaration form | Google requires a video walkthrough of exactly how the accessibility service is used, not just text | Record a 30–60s screen capture: enable Strong Lock → show the in-app disclosure screen → grant in Settings → demonstrate the BACK button blocked, the notification shade auto-dismissing, and snap-back after Home/Recents, all while locked. Keep the raw file — Play Console sometimes asks for it again after initial submission |
 | B5 | Closed testing not yet started | See §0 | Start today — this is the actual critical path to any launch date. Requires 12 testers now, not 20 |
@@ -236,12 +236,15 @@ hostile to Accessibility API use. Keep them separate.
 
 ### 3.2 Privacy Policy
 
-**Status: written, not yet live.** The full policy is at `docs/privacy-policy.html` (self-contained,
+**Status: written, not yet live.** The full policy is at `website/privacy-policy.html` (self-contained,
 light/dark aware, no external dependencies) rather than inline here, so it's the single source of
-truth instead of drifting out of sync with a copy pasted into this doc.
+truth instead of drifting out of sync with a copy pasted into this doc. It's now part of the
+promo site added 2026-08-30 (`website/index.html`), which links to it from the footer/nav.
 
-**To make it live:** GitHub repo → Settings → Pages → Source: Deploy from branch → `main` / `/docs`.
-Once enabled, it'll be reachable at:
+**To make it live:** GitHub repo → Settings → Pages → Source: **GitHub Actions**. A workflow
+(`.github/workflows/pages.yml`) already deploys the contents of `website/` on every push to `main`
+— enabling Pages just needs that one-time source selection. Once enabled, the policy will be
+reachable at:
 
 ```
 https://jmuci.github.io/android-touch-lock/privacy-policy.html
@@ -351,7 +354,7 @@ permissions** in Play Console.
 
 - **Privacy policy hosting**: resolved and live — GitHub Pages enabled 2026-08-30, confirmed
   reachable at `https://jmuci.github.io/android-touch-lock/privacy-policy.html` (§3.2).
-- **Support email**: `docs/privacy-policy.html` currently lists `jm.mucientes.fayos@gmail.com` as
+- **Support email**: `website/privacy-policy.html` currently lists `jm.mucientes.fayos@gmail.com` as
   the contact. Confirm that's the one you want public on the Play Store listing too, or swap it.
 - **Screenshots**: the three in `docs/screenshots/` may be enough as a starting point, but confirm
   they're current after the recent theming/rotation fixes on this branch before reusing them.
