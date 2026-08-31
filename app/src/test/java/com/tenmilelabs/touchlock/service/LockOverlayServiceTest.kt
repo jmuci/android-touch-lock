@@ -99,8 +99,10 @@ class LockOverlayServiceTest {
             private set
 
         init {
-            // Default: permission granted, notifications return dummy object
+            // Default: permission granted, overlay attaches successfully, notifications return
+            // dummy object. Tests exercising the attach-failure path override the show() stub.
             every { permissionManager.hasPermission() } returns true
+            every { overlayController.show(any(), any()) } returns true
             every { notificationManager.buildUnlockedNotification() } returns fakeNotification
             every { notificationManager.buildLockedNotification() } returns fakeNotification
             every { notificationManager.buildCountdownNotification(any()) } returns fakeNotification
@@ -126,7 +128,12 @@ class LockOverlayServiceTest {
                 setLockState(LockState.Unlocked) // initService sets Unlocked
             }
 
-            overlayController.show(false) {}
+            // Mirrors startLock()'s `if (!attached) { ...; return }` guard: addView can fail (e.g.
+            // BadTokenException), and locking must not proceed — no state flip, no notification,
+            // no backstop timeout — when the overlay didn't actually attach.
+            val attached = overlayController.show(false) {}
+            if (!attached) return
+
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
             isBackstopTimeoutScheduled = true
@@ -491,6 +498,45 @@ class LockOverlayServiceTest {
     }
 
     @org.junit.Test
+    fun `startLock aborts without transitioning to Locked when the overlay fails to attach`() {
+        val harness = ServiceHarness()
+        every { harness.overlayController.show(any(), any()) } returns false
+
+        harness.startLock()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify(exactly = 0) { harness.notificationManager.buildLockedNotification() }
+    }
+
+    @org.junit.Test
+    fun `startLock does not schedule the backstop timeout when the overlay fails to attach`() {
+        // A scheduled timeout here would later fire stopLock() against a lock that was never
+        // actually engaged.
+        val harness = ServiceHarness()
+        every { harness.overlayController.show(any(), any()) } returns false
+
+        harness.startLock()
+
+        assertThat(harness.isBackstopTimeoutScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `countdown completion with overlay attach failure clears the countdown instead of leaving it stuck`() {
+        // Same failure family as the permission-revoked-at-countdown-completion regression below,
+        // but for the overlay addView failing instead of permission being missing — a separate
+        // dependency that can also fail at exactly this transition point.
+        val harness = ServiceHarness()
+        harness.startDelayedLock(durationSeconds = 1)
+        every { harness.overlayController.show(any(), any()) } returns false
+
+        harness.tickCountdown()
+
+        assertThat(harness.isCountdownRunning()).isFalse()
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify(atLeast = 1) { harness.notificationManager.buildUnlockedNotification() }
+    }
+
+    @org.junit.Test
     fun `stopLock cancels pending countdown before unlocking`() {
         val harness = ServiceHarness()
         harness.startLock()
@@ -707,5 +753,19 @@ class LockOverlayServiceTest {
 
         verify(exactly = 0) { harness.overlayController.hide() }
         verify(exactly = 1) { harness.overlayController.show(any(), any()) } // startLock() only
+    }
+
+    @org.junit.Test
+    fun `rapid disconnect-reconnect-disconnect flapping re-attaches the overlay on each real disconnect, not the reconnect`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.onAccessibilityConnectionChanged(isConnected = true)
+
+        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect 1: re-attach
+        harness.onAccessibilityConnectionChanged(isConnected = true)  // reconnect: no-op for overlay
+        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect 2: re-attach again
+
+        verify(exactly = 2) { harness.overlayController.hide() }
+        verify(exactly = 3) { harness.overlayController.show(any(), any()) } // startLock() + 2 recoveries
     }
 }
