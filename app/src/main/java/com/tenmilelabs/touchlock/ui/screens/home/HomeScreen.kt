@@ -221,20 +221,34 @@ internal fun HomeScreenContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Text(
-            text = stringResource(R.string.privacy_policy_link),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .clickable { uriHandler.openUri(PRIVACY_POLICY_URL) }
-                .testTag("privacy_policy_link")
-        )
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.privacy_policy_link),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { uriHandler.openUri(PRIVACY_POLICY_URL) }
+                    .testTag("privacy_policy_link")
+            )
+            Text(
+                text = stringResource(R.string.terms_of_use_link),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { uriHandler.openUri(TERMS_OF_USE_URL) }
+                    .testTag("terms_of_use_link")
+            )
+        }
     }
 }
 
 private const val PRIVACY_POLICY_URL = "https://jmuci.github.io/android-touch-lock/privacy-policy.html"
+private const val TERMS_OF_USE_URL = "https://jmuci.github.io/android-touch-lock/terms.html"
 
 
 @Composable
@@ -450,6 +464,16 @@ fun AccessibilityDisclosureScreen(
             )
             Text(
                 text = stringResource(R.string.strong_lock_disclosure_shortcut_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_supervision_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.strong_lock_disclosure_supervision_body),
                 style = MaterialTheme.typography.bodyMedium
             )
 
