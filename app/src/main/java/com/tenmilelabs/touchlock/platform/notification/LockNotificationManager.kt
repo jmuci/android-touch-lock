@@ -51,7 +51,7 @@ class LockNotificationManager @Inject constructor(
             .build()
     }
 
-    fun buildLockedNotification(): Notification {
+    fun buildLockedNotification(isStrongLockActive: Boolean = false): Notification {
         val toggleIntent = Intent(context, LockOverlayService::class.java).apply {
             action = LockOverlayService.ACTION_TOGGLE
         }
@@ -63,10 +63,16 @@ class LockNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val lockedText = if (isStrongLockActive) {
+            R.string.notification_locked_text_strong_lock
+        } else {
+            R.string.notification_locked_text
+        }
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_24)
             .setContentTitle(context.getString(R.string.notification_locked_title))
-            .setContentText(context.getString(R.string.notification_locked_text))
+            .setContentText(context.getString(lockedText))
             .setContentIntent(togglePendingIntent)
             .setColor(ContextCompat.getColor(context, R.color.purple_200))
             .setColorized(true) // foreground services only
