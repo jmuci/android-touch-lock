@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Insets
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
@@ -11,7 +12,6 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.Surface
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
@@ -66,14 +66,28 @@ class OverlayController @Inject constructor(
     private var countdownOverlayView: CountdownOverlayView? = null
     private var countdownWindowManager: WindowManager? = null
 
+    private var navBarOverlayView: OverlayView? = null
+    private var navBarOverlayWindowManager: WindowManager? = null
+
     /**
-     * Resolves which manager/window-type a new overlay window should be added with: the
-     * connected accessibility service's own WindowManager + TYPE_ACCESSIBILITY_OVERLAY (which can
-     * cover the navigation bar) when available, else the application WindowManager +
-     * TYPE_APPLICATION_OVERLAY (today's behavior, unchanged). Resolved per-call rather than
-     * cached, since accessibility connection state can change between calls — and adding a 2032
-     * window via the app's own WindowManager throws BadTokenException, it must go through the
-     * service's WindowManager instance.
+     * Resolves the connected accessibility service's own WindowManager + TYPE_ACCESSIBILITY_OVERLAY
+     * (needed to cover the navigation bar — adding a 2032 window via the app's own WindowManager
+     * throws BadTokenException, it must go through the service's WindowManager instance), or the
+     * application WindowManager + TYPE_APPLICATION_OVERLAY when no service is connected. Resolved
+     * per-call rather than cached, since accessibility connection state can change between calls.
+     *
+     * Used ONLY by [showNavBarOverlay] below. The main touch-blocking overlay, the unlock handle,
+     * and the countdown popup are never nav-bar-adjacent and don't need this elevated window type —
+     * an earlier version routed all of them through this same resolution, which made the *entire*
+     * full-screen touch-blocking overlay a touchable TYPE_ACCESSIBILITY_OVERLAY whenever Strong
+     * Lock was connected. Confirmed on-device that this collides with the system's own edge-swipe
+     * gesture monitor when the notification shade is opened with a real drag gesture, causing a
+     * severe (17-20s) WindowManagerService/InputDispatcher stall and a system-wide ANR — reproduced
+     * with the main overlay covering the full screen, and confirmed absent when no overlay window
+     * was present at all during the same gesture. Scoping the elevated window type to only the
+     * small nav-bar-sized strip below removes that window from underneath the status bar / shade
+     * area entirely, which is also what this service's own architecture documentation always
+     * described this overlay as being scoped to.
      */
     @VisibleForTesting
     internal fun resolveTarget(): Pair<WindowManager, Int> {
@@ -100,15 +114,53 @@ class OverlayController @Inject constructor(
             debugTintVisible = debugTintVisible
         )
 
-        val (manager, type) = resolveTarget()
-        if (tryAddOverlayView(view, manager, type)) return true
-
-        if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
-            // Fail safely: fall back to the application-overlay path rather than failing the lock.
-            Timber.w("Accessibility overlay failed, falling back to application overlay")
-            return tryAddOverlayView(view, appWindowManager, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        // Always the application overlay — never elevated to TYPE_ACCESSIBILITY_OVERLAY. See the
+        // doc comment on resolveTarget() for why: this window spans the full screen, and making it
+        // touchable at the accessibility-overlay layer is what caused the system-wide ANR.
+        if (!tryAddOverlayView(view, appWindowManager, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)) {
+            return false
         }
-        return false
+
+        // Nav-bar tap blocking, scoped to just that strip, is the one thing that still needs the
+        // elevated window type — added as a second, separate window rather than by elevating the
+        // main overlay above. Best-effort: failure here (or accessibility not being connected at
+        // all, the default-mode case) doesn't fail the lock, it just narrows to the pre-existing,
+        // documented limitation of not blocking nav-bar taps.
+        showNavBarOverlay(onUnlockRequested)
+        return true
+    }
+
+    private fun showNavBarOverlay(onUnlockRequested: () -> Unit) {
+        hideNavBarOverlay()
+
+        val (manager, type) = resolveTarget()
+        if (type != WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) return
+
+        val params = navigationBarLayoutParams(manager) ?: return
+        val view = OverlayView(
+            context = context,
+            onDoubleTapDetected = { showUnlockHandle(onUnlockRequested) }
+        )
+        try {
+            manager.addView(view, params)
+            navBarOverlayView = view
+            navBarOverlayWindowManager = manager
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add nav-bar overlay view")
+        }
+    }
+
+    private fun hideNavBarOverlay() {
+        navBarOverlayView?.let {
+            it.cleanup()
+            try {
+                (navBarOverlayWindowManager ?: appWindowManager).removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove nav-bar overlay view")
+            }
+        }
+        navBarOverlayView = null
+        navBarOverlayWindowManager = null
     }
 
     private fun tryAddOverlayView(view: OverlayView, manager: WindowManager, type: Int): Boolean {
@@ -151,6 +203,19 @@ class OverlayController @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to relayout overlay view after configuration change")
         }
+
+        // Nav bar position/size can change on rotation (e.g. moves to a side edge on some
+        // 3-button-nav devices in landscape) — recompute rather than reuse the params it was
+        // originally added with.
+        navBarOverlayView?.let { navView ->
+            val navManager = navBarOverlayWindowManager ?: return@let
+            val params = navigationBarLayoutParams(navManager) ?: return@let
+            try {
+                navManager.updateViewLayout(navView, params)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to relayout nav-bar overlay view after configuration change")
+            }
+        }
     }
 
     fun hide() {
@@ -159,6 +224,9 @@ class OverlayController @Inject constructor(
 
         // Clean up unlock handle
         hideUnlockHandle()
+
+        // Clean up nav-bar overlay
+        hideNavBarOverlay()
 
         unregisterRotationListener()
 
@@ -187,11 +255,15 @@ class OverlayController @Inject constructor(
             updateCountdown(initialSeconds)
         }
 
-        val (manager, type) = resolveTarget()
+        // Never nav-bar-adjacent — always the application overlay, same as the main touch-blocking
+        // overlay. See the doc comment on resolveTarget() for why this must not be elevated.
         try {
-            manager.addView(view, countdownLayoutParams(type))
+            appWindowManager.addView(
+                view,
+                countdownLayoutParams(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            )
             countdownOverlayView = view
-            countdownWindowManager = manager
+            countdownWindowManager = appWindowManager
         } catch (e: Exception) {
             Timber.e(e, "Failed to add countdown overlay view")
         }
@@ -228,11 +300,15 @@ class OverlayController @Inject constructor(
             onUnlockRequested()
         }
 
-        val (manager, type) = resolveTarget()
+        // Never nav-bar-adjacent — always the application overlay, same as the main touch-blocking
+        // overlay. See the doc comment on resolveTarget() for why this must not be elevated.
         try {
-            manager.addView(view, handleLayoutParams(type))
+            appWindowManager.addView(
+                view,
+                handleLayoutParams(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            )
             unlockHandleView = view
-            unlockHandleWindowManager = manager
+            unlockHandleWindowManager = appWindowManager
         } catch (e: Exception) {
             Timber.e(e, "Failed to add unlock handle view")
             return
@@ -265,36 +341,34 @@ class OverlayController @Inject constructor(
     /**
      * Explicit real display bounds rather than MATCH_PARENT, which — confirmed on-device,
      * empirically, after MATCH_PARENT + a manual y-offset left a same-size gap on the wrong edge
-     * post-rotation — turns out to trigger an implicit system-bar-avoidance reservation of its
-     * own for TYPE_ACCESSIBILITY_OVERLAY specifically (confirmed via dumpsys `Frames`, which shows
-     * the actual applied frame shrunk by ~status-bar-height on one edge regardless of the
-     * requested LayoutParams). That reservation is tied to the *device's* natural-orientation edge
-     * rather than the display's current rotation, and — confirmed by direct on-device touch
-     * testing, tapping through to see which taps this window actually receives — it's correct in
-     * portrait (protects the real status bar) but wrong in landscape (lands on the nav-bar edge
-     * instead, leaving the real status bar, now a different edge, unprotected). It persists
-     * identically whether or not `fitInsetsTypes` is explicitly zeroed, so it isn't something
-     * disable-able through public LayoutParams fields — it must be worked with, not fought.
+     * post-rotation — turns out to trigger an implicit system-bar-avoidance reservation on some
+     * OEM builds for TYPE_ACCESSIBILITY_OVERLAY specifically.
      *
-     * So: request the display's actual pixel bounds (fixes the *nav-bar* gap the platform
-     * reservation left behind in landscape — confirmed via tapping past the platform's own
-     * reserved strip and seeing the tap correctly consumed instead of reaching the launcher), and
-     * *separately*, on API 30+, additionally shrink our own request by the live, rotation-correct
-     * WindowInsets.Type.statusBars() inset (which — unlike a raw pixel offset — is recomputed
-     * fresh per rotation and always reports the edge the status bar is *actually* on right now).
-     * This runs unconditionally, regardless of what the platform's own reservation independently
-     * does: in portrait, where the platform's reservation already protects the status bar, this
-     * doubles up on the same edge — confirmed on-device this is NOT harmless, it stacks into a
-     * genuine 150px dead zone (2x the ~75px status bar height) where touch-blocking silently
-     * doesn't apply to real app content underneath, worse than the gap being fixed. So this only
-     * runs away from ROTATION_0 (natural orientation), where the platform's reservation lands on
-     * a *different* edge than the real status bar and there's no stacking risk; in landscape it's
-     * what actually closes the real gap the platform reservation misses.
-     * Below API 30, there's no live per-edge inset query available, so this falls back to the
-     * historical fixed-top-offset behavior — correct in portrait, not rotation-aware in landscape
-     * on these older API levels, the same kind of disclosed narrower-on-old-API-levels limitation
-     * already documented elsewhere in this codebase (see the shade-auto-dismiss API gate in
-     * TouchLockAccessibilityService).
+     * An earlier version of this method trusted that platform reservation and only shrunk our own
+     * request away from status-bar insets outside portrait/ROTATION_0, on the theory that the
+     * platform already handled portrait and self-shrinking there too would double up into a dead
+     * zone. **That assumption doesn't hold everywhere**: confirmed via `dumpsys window` on a
+     * stock/AOSP build (Pixel emulator image, API 36) that the platform applies no such
+     * reservation at all — `fitInsetsTypes` is set but overridden by our own
+     * `FLAG_LAYOUT_NO_LIMITS`, so the *applied* frame matched our *requested* full-bounds frame
+     * exactly, status bar included. With Strong Lock active, that leaves this touchable
+     * TYPE_ACCESSIBILITY_OVERLAY window covering the exact pixels a real edge-swipe-down gesture
+     * (opening the notification shade) needs to be recognized on — confirmed on-device this
+     * triggers a severe (17-20s) WindowManagerService/InputDispatcher stall and a system-wide ANR,
+     * not merely a swallowed gesture. That is a strictly worse failure mode than the cosmetic
+     * double-inset dead zone this method used to avoid.
+     *
+     * So: always shrink our own request by the live, rotation-correct WindowInsets.Type.statusBars()
+     * inset on API 30+ for the accessibility-overlay type, in every rotation including portrait,
+     * regardless of what any given OEM's platform reservation independently does. On an OEM build
+     * where the platform *also* reserves this space (as previously confirmed on one Samsung
+     * device), this now double-shrinks in portrait — a bounded, cosmetic-only gap near the top
+     * edge — which is the accepted tradeoff for eliminating a reproducible, system-wide ANR on
+     * other builds. Below API 30, there's no live per-edge inset query available, so this falls
+     * back to the historical fixed-top-offset behavior — correct in portrait, not rotation-aware
+     * in landscape on these older API levels, the same kind of disclosed narrower-on-old-API-levels
+     * limitation already documented elsewhere in this codebase (see the shade-auto-dismiss API
+     * gate in TouchLockAccessibilityService).
      *
      * Since a live window doesn't recompute any of this on its own, [relayoutForCurrentBounds]
      * reapplies it on every configuration change.
@@ -306,9 +380,7 @@ class OverlayController @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val metrics = manager.currentWindowMetrics
             bounds = Rect(metrics.bounds)
-            @Suppress("DEPRECATION") // defaultDisplay itself, not getRealSize; no non-deprecated equivalent here.
-            val rotation = manager.defaultDisplay.rotation
-            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY && rotation != Surface.ROTATION_0) {
+            if (type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) {
                 val statusBarInsets = metrics.windowInsets.getInsets(WindowInsets.Type.statusBars())
                 bounds.left += statusBarInsets.left
                 bounds.top += statusBarInsets.top
@@ -345,6 +417,67 @@ class OverlayController @Inject constructor(
      */
     private fun legacyStatusBarHeightPx(): Int {
         val resourceId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
+    }
+
+    /**
+     * LayoutParams for a small window covering just the navigation bar strip — never the full
+     * screen — so the elevated TYPE_ACCESSIBILITY_OVERLAY window type this requires never overlaps
+     * the status bar / notification-shade area. Returns null when there's nothing to cover (no
+     * navigation-bar inset reported at all, e.g. some gesture-nav configurations), in which case
+     * [showNavBarOverlay] skips adding a window — consistent with the existing documented
+     * limitation that gesture-nav swipes aren't blocked by this overlay, only reacted to via
+     * snap-back.
+     */
+    @VisibleForTesting
+    internal fun navigationBarLayoutParams(manager: WindowManager): WindowManager.LayoutParams? {
+        val bounds: Rect
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val full = Rect(manager.currentWindowMetrics.bounds)
+            val navInsets = manager.currentWindowMetrics.windowInsets.getInsets(WindowInsets.Type.navigationBars())
+            bounds = navigationBarStrip(full, navInsets) ?: return null
+        } else {
+            val point = Point()
+            @Suppress("DEPRECATION")
+            manager.defaultDisplay.getRealSize(point)
+            val height = legacyNavigationBarHeightPx()
+            if (height <= 0) return null
+            bounds = Rect(0, point.y - height, point.x, point.y)
+        }
+        return WindowManager.LayoutParams(
+            bounds.width(),
+            bounds.height(),
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = bounds.left
+            y = bounds.top
+        }
+    }
+
+    /**
+     * Reduces the full display bounds to just the edge strip where the navigation-bar inset is
+     * reported — bottom on the vast majority of devices/orientations, but left/right on some
+     * 3-button-nav devices in landscape. Null when no edge reports a nonzero inset.
+     */
+    @VisibleForTesting
+    internal fun navigationBarStrip(full: Rect, navInsets: Insets): Rect? = when {
+        navInsets.bottom > 0 -> Rect(full.left, full.bottom - navInsets.bottom, full.right, full.bottom)
+        navInsets.left > 0 -> Rect(full.left, full.top, full.left + navInsets.left, full.bottom)
+        navInsets.right > 0 -> Rect(full.right - navInsets.right, full.top, full.right, full.bottom)
+        navInsets.top > 0 -> Rect(full.left, full.top, full.right, full.top + navInsets.top)
+        else -> null
+    }
+
+    /**
+     * Navigation bar height in px, for the pre-API-30 fallback in [navigationBarLayoutParams] only
+     * — below API 30 there's no live per-edge WindowInsets query available. Resource lookup rather
+     * than the deprecated WindowInsets APIs so it works uniformly from minSdk 26.
+     */
+    private fun legacyNavigationBarHeightPx(): Int {
+        val resourceId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
     }
 

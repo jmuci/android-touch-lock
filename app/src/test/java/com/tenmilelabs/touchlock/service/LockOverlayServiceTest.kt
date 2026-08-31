@@ -112,9 +112,14 @@ class LockOverlayServiceTest {
         /** Mirrors LockOverlayService.startLock() decision logic. */
         fun startLock() {
             if (getLockState() == LockState.Locked) return
-            if (!permissionManager.hasPermission()) return
 
+            // Cancelled before the permission check: startLock() is what the countdown calls when
+            // it reaches zero, and cancelCountdown() is what restores the unlocked notification —
+            // checking permission first left the countdown notification stuck forever whenever
+            // permission was revoked mid-countdown.
             cancelCountdown()
+
+            if (!permissionManager.hasPermission()) return
 
             if (!isServiceRunning) {
                 isServiceRunning = true
@@ -192,7 +197,11 @@ class LockOverlayServiceTest {
                 overlayController.updateCountdown(countdownSecondsRemaining)
                 notificationManager.buildCountdownNotification(countdownSecondsRemaining)
             } else {
-                isCountdownActive = false
+                // isCountdownActive deliberately stays true here, mirroring the real countdown
+                // coroutine: it doesn't null out countdownJob itself, only cancelCountdown() does
+                // (called from within startLock() below). Flipping it here first would make that
+                // cancelCountdown() call a no-op, masking the stuck-notification bug this was
+                // meant to catch.
                 overlayController.hideCountdownOverlay()
                 startLock()
             }
@@ -464,6 +473,21 @@ class LockOverlayServiceTest {
 
         assertThat(harness.isCountdownRunning()).isFalse()
         assertThat(getLockState()).isEqualTo(LockState.Locked)
+    }
+
+    @org.junit.Test
+    fun `countdown completion with permission revoked cancels countdown instead of leaving it stuck`() {
+        val harness = ServiceHarness()
+        harness.startDelayedLock(durationSeconds = 1)
+
+        // Permission revoked at the exact moment the countdown reaches zero and calls startLock()
+        every { harness.permissionManager.hasPermission() } returns false
+        harness.tickCountdown()
+
+        assertThat(harness.isCountdownRunning()).isFalse()
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        // The countdown notification must be replaced with the unlocked one, not left stuck
+        verify(atLeast = 1) { harness.notificationManager.buildUnlockedNotification() }
     }
 
     @org.junit.Test
