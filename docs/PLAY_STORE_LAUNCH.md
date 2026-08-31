@@ -166,8 +166,8 @@ Roughly sequenced — earlier items unblock later ones.
 - [x] **C4** — ~~Enable GitHub Pages~~ — done 2026-08-30, confirmed live at `https://jmuci.github.io/android-touch-lock/privacy-policy.html`. Note: it's serving `main`'s current version — the shade-dismissal accuracy fix on this branch won't be live until this branch merges.
 - [ ] **C5** — Create the app in Play Console; fill Store Listing (draft copy in §3.1).
 - [ ] **C6** — Complete the Data Safety form (answers in §3.4).
-- [ ] **C7** — Complete the Content Rating (IARC) questionnaire and Target Audience section per I5.
-- [ ] **C8** — Complete the Accessibility Permissions Declaration Form (justification text in §3.3, refreshed 2026-08-30 to cover BACK-key interception and shade dismissal, and hardened per §1.5's risk analysis) — attach the screen recording from C9.
+- [ ] **C7** — Complete the Content Rating (IARC) questionnaire and Target Audience section per I5. **Manual — Play Console login required**: this is a console form gated on your own account credentials; no assistant can complete it for you. Draft answer is in §3.1 ("Target audience").
+- [ ] **C8** — Complete the Accessibility Permissions Declaration Form (justification text in §3.3, refreshed 2026-08-30 to cover BACK-key interception and shade dismissal, and hardened per §1.5's risk analysis) — attach the screen recording from C9. **Manual — Play Console login required**: same as C7, this form lives behind your Play Console account and has to be filled in and submitted by you directly; the justification text is drafted and ready to paste, but pasting it in is a step only you can take.
 - [ ] **C8b** — **New, 2026-08-30**: Complete the separate Foreground Service Permission declaration (App content → Foreground service permissions) using the draft in §3.5 — missed entirely in the original audit (B6).
 - [ ] **C9** — Record the 30–60s Strong Lock screen-capture demo (B4) — should now show all three behaviors: BACK blocked, shade auto-dismissed, snap-back on Home/Recents. Reused for both C8 and C8b.
 - [ ] **C10** — Build a signed release AAB (`./gradlew bundleRelease`), upload to the **Closed testing** track, add your tester list, publish the closed test.
@@ -353,6 +353,17 @@ permissions** in Play Console.
 
 ## 4. Open questions for you
 
+- **New, 2026-08-30, from the legal/compliance copy review**: two Play Console items can't be
+  completed by an assistant, full stop — they're forms gated behind your personal Play Console
+  login, not something reachable via the repo or CLI:
+  - The **Accessibility Permissions Declaration Form** (C8 / §3.3) — justification text is fully
+    drafted and ready to paste, but submitting it requires your account.
+  - The **Target Audience and content settings** (C7 / I5 / §3.1) — the recommended answer
+    (adults/general audience, not "designed for children") is documented, but the questionnaire
+    itself only accepts input from the account owner.
+  Both are flagged inline at C7/C8 above. Terms of Use and the supporting disclaimer copy (this
+  review's other output — see `website/terms.html`) are already committed and don't need any
+  console action beyond enabling GitHub Pages, which is already done (§3.2).
 - **Privacy policy hosting**: resolved and live — GitHub Pages enabled 2026-08-30, confirmed
   reachable at `https://jmuci.github.io/android-touch-lock/privacy-policy.html` (§3.2).
 - **Support email**: `website/privacy-policy.html` currently lists `jm.mucientes.fayos@gmail.com` as
