@@ -21,9 +21,18 @@
 appId: com.tenmilelabs.touchlock
 ---
 - launchApp
-- assertVisible:
-    id: "lock_button"
-
+# lock_button isn't guaranteed to be in the initial viewport without
+# scrolling — how much content sits above it (permission warnings, the Strong
+# Lock upsell card, copy length) varies with screen size and app state.
+# tapOn on its own does NOT scroll to find an off-screen match (confirmed:
+# plain tapOn failed with "Element not found" here even though the node
+# exists further down the same verticalScroll column) — scrollUntilVisible
+# does, so scroll explicitly first.
+- scrollUntilVisible:
+    element:
+      id: "lock_button"
+    direction: DOWN
+    timeout: 5000
 - tapOn:
     id: "lock_button"
 
@@ -44,7 +53,11 @@ appId: com.tenmilelabs.touchlock
 - longPressOn:
     point: "50%, 50%"
 
-- extendedWaitUntil:
-    visible:
+# scrollUntilVisible rather than a plain wait: the scroll offset from finding
+# lock_button before locking may not put it back in view once unlocked, since
+# the locked/unlocked branches render different content above it.
+- scrollUntilVisible:
+    element:
       id: "lock_button"
+    direction: DOWN
     timeout: 5000
