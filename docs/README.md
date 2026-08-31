@@ -11,6 +11,7 @@ Engineering documentation for the Touch Lock Android app.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **Start here.** System design, data flow, component responsibilities, known constraints, and tech debt. |
 | [DEBUGGING_GUIDE.md](DEBUGGING_GUIDE.md) | Troubleshooting common issues, logcat filters, testing scenarios, debugging checklist. |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | Testing strategy, tier breakdown (unit/integration/E2E), examples, anti-patterns. |
+| [QA_SESSION_PROMPT.md](QA_SESSION_PROMPT.md) | Ready-to-copy prompt for a pre-release manual QA pass, refined with learnings from actually running it. |
 | [learnings.md](learnings.md) | Why-not-X design decisions, Android patterns used with code examples, key takeaways. |
 
 ---
