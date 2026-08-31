@@ -137,6 +137,9 @@ class LockOverlayService : LifecycleService() {
                     overlayController.hide()
                     overlayController.show(debugOverlayVisible) { stopLock() }
                 }
+                if (isConnected != wasAccessibilityConnected && _lockState.value == LockState.Locked) {
+                    assertForegroundState(notificationManager.buildLockedNotification(isConnected))
+                }
                 wasAccessibilityConnected = isConnected
             }
         }
@@ -168,7 +171,9 @@ class LockOverlayService : LifecycleService() {
             Timber.e("startLock: overlay addView failed; aborting lock")
             return
         }
-        assertForegroundState(notificationManager.buildLockedNotification())
+        assertForegroundState(
+            notificationManager.buildLockedNotification(accessibilityServiceHolder.isConnected.value)
+        )
         _lockState.value = LockState.Locked
         hapticController.vibrateOnLock()
 
@@ -245,7 +250,8 @@ class LockOverlayService : LifecycleService() {
 
         // Reassert foreground state with current lock state's notification
         val notification = when (_lockState.value) {
-            LockState.Locked -> notificationManager.buildLockedNotification()
+            LockState.Locked ->
+                notificationManager.buildLockedNotification(accessibilityServiceHolder.isConnected.value)
             LockState.Unlocked -> notificationManager.buildUnlockedNotification()
         }
 

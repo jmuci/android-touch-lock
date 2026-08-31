@@ -33,6 +33,7 @@
     <string name="notification_unlocked_text">Tap to lock</string>
     <string name="notification_locked_title">Touch Lock active</string>
     <string name="notification_locked_text">Tap to unlock</string>
+    <string name="notification_locked_text_strong_lock">Hold Volume Up + Down for 3s to unlock</string>
     <string name="notification_countdown_title">Touch Lock countdown</string>
     <string name="notification_countdown_text">Locking in %d seconds…</string>
 

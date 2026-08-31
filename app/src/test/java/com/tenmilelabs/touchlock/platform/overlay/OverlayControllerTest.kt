@@ -105,6 +105,47 @@ class OverlayControllerTest {
         assertThat(type).isEqualTo(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
     }
 
+    // --- isGestureNavigationMode() ---
+
+    @Test
+    fun `isGestureNavigationMode returns true when config_navBarInteractionMode resolves to gesture mode`() {
+        every {
+            mockResources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        } returns 12345
+        every { mockResources.getInteger(12345) } returns 2
+
+        assertThat(controller.isGestureNavigationMode()).isTrue()
+    }
+
+    @Test
+    fun `isGestureNavigationMode returns false for 3-button nav`() {
+        every {
+            mockResources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        } returns 12345
+        every { mockResources.getInteger(12345) } returns 0
+
+        assertThat(controller.isGestureNavigationMode()).isFalse()
+    }
+
+    @Test
+    fun `isGestureNavigationMode returns false for the deprecated 2-button pie mode`() {
+        every {
+            mockResources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        } returns 12345
+        every { mockResources.getInteger(12345) } returns 1
+
+        assertThat(controller.isGestureNavigationMode()).isFalse()
+    }
+
+    @Test
+    fun `isGestureNavigationMode defaults to false when the resource cannot be resolved`() {
+        every {
+            mockResources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        } returns 0
+
+        assertThat(controller.isGestureNavigationMode()).isFalse()
+    }
+
     // --- hide() crash safety ---
 
     @Test
