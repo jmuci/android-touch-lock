@@ -21,11 +21,18 @@
 appId: com.tenmilelabs.touchlock
 ---
 - launchApp
-# tapOn (not a plain assertVisible) since lock_button isn't guaranteed to be in
-# the initial viewport without scrolling — how much content sits above it
-# (permission warnings, the Strong Lock upsell card, copy length) varies with
-# screen size and with the app's own state; tapOn scrolls to find it, a bare
-# assertVisible does not.
+# lock_button isn't guaranteed to be in the initial viewport without
+# scrolling — how much content sits above it (permission warnings, the Strong
+# Lock upsell card, copy length) varies with screen size and app state.
+# tapOn on its own does NOT scroll to find an off-screen match (confirmed:
+# plain tapOn failed with "Element not found" here even though the node
+# exists further down the same verticalScroll column) — scrollUntilVisible
+# does, so scroll explicitly first.
+- scrollUntilVisible:
+    element:
+      id: "lock_button"
+    direction: DOWN
+    timeout: 5000
 - tapOn:
     id: "lock_button"
 
