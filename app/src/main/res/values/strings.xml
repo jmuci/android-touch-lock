@@ -3,9 +3,10 @@
     
     <!-- Home Screen -->
     <string name="home_title">Touch Lock App</string>
-    <string name="home_description">Screen lock app for safe usage for kids or to prevent accidental touches.</string>
+    <string name="home_description">A parent-controlled screen lock that blocks accidental touches — for supervised kids\' use or hands-free video calls.</string>
     <string name="build_version_footnote">Build %1$s</string>
     <string name="privacy_policy_link">Privacy Policy</string>
+    <string name="terms_of_use_link">Terms of Use</string>
     <string name="permission_message">Touch Lock needs permission to draw over other apps in order to block touch input.</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="lock_in_10s">Lock in 10s</string>
@@ -48,7 +49,7 @@
     <string name="accessibility_service_description">Used only while Touch Lock is active, to block navigation bar taps, dismiss an opened notification shade, and bring the protected app back to the front if you navigate away. Never reads or shares what\'s on your screen.</string>
 
     <string name="strong_lock_upsell_title">Toddler-Proof Lock available</string>
-    <string name="strong_lock_upsell_description">Also block navigation bar taps and auto-return to the locked app if it\'s swiped away. Optional, off by default.</string>
+    <string name="strong_lock_upsell_description">Also block navigation bar taps and auto-return to the locked app if it\'s swiped away. Optional, off by default, and not a substitute for supervision.</string>
     <string name="strong_lock_upsell_learn_more">Learn more</string>
 
     <string name="strong_lock_disclosure_title">Turn on Toddler-Proof Lock?</string>
@@ -60,6 +61,8 @@
     <string name="strong_lock_disclosure_sharing_body">This information is used only to keep the protected app in front while Touch Lock is active. It is processed entirely on your device and is never transmitted, stored remotely, or shared with anyone.</string>
     <string name="strong_lock_disclosure_shortcut_title">One more thing</string>
     <string name="strong_lock_disclosure_shortcut_body">On the next screen, turn on the main toggle only. Skip \"Shortcut\" — enabling it would let Touch Lock be turned off with a quick volume-button press, defeating the point of Toddler-Proof Lock.</string>
+    <string name="strong_lock_disclosure_supervision_title">Please note</string>
+    <string name="strong_lock_disclosure_supervision_body">Toddler-Proof Lock is a safety aid, not a substitute for supervision. No lock can guarantee that every tap, swipe, or hardware button press is blocked on every device. Keep your child within sight and hearing while the device is locked, the same as with any screen you hand them.</string>
     <string name="strong_lock_disclosure_decline">Not now</string>
     <string name="strong_lock_disclosure_continue">Continue to Settings</string>
 </resources>
