@@ -55,7 +55,12 @@ jobs:
       - name: Run Maestro flows
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          # POST_NOTIFICATIONS is a runtime permission only from API 33 (Android 13) onward —
+          # granting it below that throws "Unknown permission" and fails the job, since the
+          # permission doesn't exist yet on those OS versions (notifications are on by default
+          # pre-33). ui-tests.yml's instrumented tests stay on API 29; this flow specifically
+          # needs 33+ for the grant step below to be valid.
+          api-level: 33
           target: default
           arch: x86_64
           profile: pixel_3
