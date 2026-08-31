@@ -123,15 +123,18 @@ class OverlayController @Inject constructor(
 
         // Nav-bar tap blocking, scoped to just that strip, is the one thing that still needs the
         // elevated window type — added as a second, separate window rather than by elevating the
-        // main overlay above. Best-effort: failure here (or accessibility not being connected at
-        // all, the default-mode case) doesn't fail the lock, it just narrows to the pre-existing,
-        // documented limitation of not blocking nav-bar taps.
+        // main overlay above. Skipped entirely in gesture-navigation mode (see
+        // isGestureNavigationMode()). Best-effort: failure here (or accessibility not being
+        // connected at all, the default-mode case, or gesture nav) doesn't fail the lock, it just
+        // narrows to the pre-existing, documented limitation of not blocking nav-bar taps/swipes.
         showNavBarOverlay(onUnlockRequested)
         return true
     }
 
     private fun showNavBarOverlay(onUnlockRequested: () -> Unit) {
         hideNavBarOverlay()
+
+        if (isGestureNavigationMode()) return
 
         val (manager, type) = resolveTarget()
         if (type != WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) return
@@ -421,6 +424,35 @@ class OverlayController @Inject constructor(
     }
 
     /**
+     * True when the device's system navigation is gesture-based (edge-to-edge swipe, no nav-bar
+     * buttons) rather than 3-button or the deprecated 2-button/pie mode. Read via the same
+     * internal-resource-lookup pattern already used by [legacyStatusBarHeightPx] /
+     * [legacyNavigationBarHeightPx] — `config_navBarInteractionMode` is unofficial API but has
+     * been the standard, stable way apps detect this since gesture nav shipped in API 29; there's
+     * no public equivalent. Defaults to false (3-button) when the resource can't be resolved,
+     * which is also the correct answer on every API level below 29, where gesture nav doesn't
+     * exist.
+     *
+     * Used to skip [showNavBarOverlay] entirely in gesture-nav mode: the elevated
+     * TYPE_ACCESSIBILITY_OVERLAY window it requires competes with the system's own edge-swipe
+     * gesture monitor for input-dispatch priority at the same screen edge — confirmed on-device
+     * this still causes a brief (~7s) but real system-wide input stall even after scoping the
+     * window down to just the nav-bar strip (see [resolveTarget]'s doc comment for the full
+     * history). That window also can't usefully block gesture navigation in the first place —
+     * swiping isn't a tap this overlay can intercept — so snap-back
+     * (TouchLockAccessibilityService) is already the sole real defense in gesture-nav mode, and
+     * skipping the window removes the conflict at no functional cost. 3-button and 2-button nav
+     * have real tappable buttons this overlay usefully blocks, and no competing edge-swipe
+     * gesture monitor at that screen location, so the window stays safe to show there.
+     */
+    @VisibleForTesting
+    internal fun isGestureNavigationMode(): Boolean {
+        val resourceId = context.resources.getIdentifier("config_navBarInteractionMode", "integer", "android")
+        val mode = if (resourceId > 0) context.resources.getInteger(resourceId) else 0
+        return mode == GESTURE_NAV_INTERACTION_MODE
+    }
+
+    /**
      * LayoutParams for a small window covering just the navigation bar strip — never the full
      * screen — so the elevated TYPE_ACCESSIBILITY_OVERLAY window type this requires never overlaps
      * the status bar / notification-shade area. Returns null when there's nothing to cover (no
@@ -511,5 +543,9 @@ class OverlayController @Inject constructor(
 
     companion object {
         private const val HANDLE_VISIBILITY_TIMEOUT_MS = 4000L // 4 seconds
+
+        // config_navBarInteractionMode values, per AOSP: 0 = 3-button, 1 = 2-button/pie
+        // (deprecated), 2 = gesture. See isGestureNavigationMode().
+        private const val GESTURE_NAV_INTERACTION_MODE = 2
     }
 }
