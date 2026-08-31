@@ -138,7 +138,7 @@ class SnapBackDecisionLogicTest {
                 snapBackTimestamps.removeFirst()
             }
 
-            if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
+            if (snapBackTimestamps.size >= MAX_SNAP_BACK_ATTEMPTS) {
                 forceUnlockTriggered = true
                 return
             }
@@ -146,7 +146,10 @@ class SnapBackDecisionLogicTest {
         }
 
         companion object {
-            private const val MAX_SNAP_BACK_ATTEMPTS = 3
+            // Not private: tests below sweep the boundary around this value directly rather than
+            // hardcoding it a second time, so a future change to the threshold can't silently
+            // desync the tests from the value they're supposed to be bounding.
+            const val MAX_SNAP_BACK_ATTEMPTS = 3
             const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L
             private const val SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS = 1500L
             const val SYSTEM_UI_PACKAGE = "com.android.systemui"
@@ -239,24 +242,43 @@ class SnapBackDecisionLogicTest {
     // --- Rate limiting ---
 
     @Test
-    fun `allows up to 3 snap-back relaunches per lock session`() {
+    fun `allows up to MAX_SNAP_BACK_ATTEMPTS minus one relaunches before the limit trips`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
 
-        repeat(3) { harness.onWindowStateChanged("com.launcher") }
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS - 1) { harness.onWindowStateChanged("com.launcher") }
 
-        assertThat(harness.snapBackCount).isEqualTo(3)
+        assertThat(harness.snapBackCount).isEqualTo(Harness.MAX_SNAP_BACK_ATTEMPTS - 1)
         assertThat(harness.forceUnlockTriggered).isFalse()
     }
 
     @Test
-    fun `4th relaunch attempt in the same lock session releases the lock instead of looping`() {
+    fun `the MAX_SNAP_BACK_ATTEMPTSth relaunch attempt in the same lock session releases the lock instead of relaunching`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
 
-        repeat(4) { harness.onWindowStateChanged("com.launcher") }
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS) { harness.onWindowStateChanged("com.launcher") }
 
         assertThat(harness.forceUnlockTriggered).isTrue()
+    }
+
+    @Test
+    fun `force-unlock trips exactly at the MAX_SNAP_BACK_ATTEMPTSth relaunch, not before or after`() {
+        // Sweeps attempt counts around the boundary instead of relying on a single hardcoded
+        // example. This is the same class of bug (`>` vs `>=`) that slipped through here
+        // undetected once already — this file's harness had drifted from the `>=` fix already
+        // applied in production, so its old single-example tests were passing while asserting the
+        // pre-fix, buggy threshold. A boundary sweep makes a future regression fail immediately
+        // instead of needing the "right" example count to be re-derived by hand.
+        for (attempts in 1..(Harness.MAX_SNAP_BACK_ATTEMPTS + 2)) {
+            val harness = Harness(isLocked = true)
+            harness.setLocked(true)
+
+            repeat(attempts) { harness.onWindowStateChanged("com.launcher") }
+
+            val expectedTriggered = attempts >= Harness.MAX_SNAP_BACK_ATTEMPTS
+            assertThat(harness.forceUnlockTriggered).isEqualTo(expectedTriggered)
+        }
     }
 
     // --- Rate limiting: rolling window, not a flat per-session cap ---
@@ -297,11 +319,14 @@ class SnapBackDecisionLogicTest {
     fun `an attempt exactly at the window boundary still counts toward the limit`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
-        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 at t=0
+        // One below the trip threshold at t=0, so the boundary attempt below is what tips it —
+        // if it didn't count (pruned early), this would stay under the limit instead.
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS - 1) { harness.onWindowStateChanged("com.launcher") }
 
         // Exactly the window width, not past it — pruning requires strictly *greater than* the
         // window (see performSnapBack's `now - snapBackTimestamps.first() > ...`), so the first
-        // attempt is still in-window here and this is the 4th surviving entry, not a fresh 1st.
+        // attempt is still in-window here and this is the MAX_SNAP_BACK_ATTEMPTSth surviving
+        // entry, not a fresh 1st.
         harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS
         harness.onWindowStateChanged("com.launcher")
 
@@ -312,11 +337,13 @@ class SnapBackDecisionLogicTest {
     fun `attempts older than the window drop out of the count`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
-        repeat(3) { harness.onWindowStateChanged("com.launcher") } // 3 packed at t=0
-        assertThat(harness.snapBackCount).isEqualTo(3)
+        // One below the trip threshold, so this test's pruning assertion below isn't confounded
+        // by the limit having already tripped.
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS - 1) { harness.onWindowStateChanged("com.launcher") }
+        assertThat(harness.snapBackCount).isEqualTo(Harness.MAX_SNAP_BACK_ATTEMPTS - 1)
 
         harness.currentElapsedMillis += Harness.SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS + 1
-        harness.onWindowStateChanged("com.launcher") // 1 more, long after the first 3 aged out
+        harness.onWindowStateChanged("com.launcher") // 1 more, long after the earlier ones aged out
 
         assertThat(harness.snapBackCount).isEqualTo(1)
         assertThat(harness.forceUnlockTriggered).isFalse()
@@ -326,8 +353,10 @@ class SnapBackDecisionLogicTest {
     fun `snap-back count resets on a new lock session`() {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
-        repeat(3) { harness.onWindowStateChanged("com.launcher") }
-        assertThat(harness.snapBackCount).isEqualTo(3)
+        // One below the trip threshold, so forceUnlockTriggered (which never resets on its own —
+        // only a fresh Harness/lock session matters here) isn't already true before the reset.
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS - 1) { harness.onWindowStateChanged("com.launcher") }
+        assertThat(harness.snapBackCount).isEqualTo(Harness.MAX_SNAP_BACK_ATTEMPTS - 1)
 
         harness.setLocked(false)
         harness.setLocked(true)
@@ -488,17 +517,19 @@ class SnapBackDecisionLogicTest {
         val harness = Harness(isLocked = true)
         harness.setLocked(true)
 
-        // 3 real snap-backs, each preceded by a shade dismissal that must not itself count —
-        // these are two independent mechanisms (dismissShade's grace window vs performSnapBack's
-        // rate-limit window) and a dismissal returns before ever reaching performSnapBack, so it
-        // must never inflate snapBackCount.
-        repeat(3) {
+        // MAX_SNAP_BACK_ATTEMPTS-1 real snap-backs (staying below the trip threshold), each
+        // preceded by a shade dismissal that must not itself count — these are two independent
+        // mechanisms (dismissShade's grace window vs performSnapBack's rate-limit window) and a
+        // dismissal returns before ever reaching performSnapBack, so it must never inflate
+        // snapBackCount. If dismissals did count, this many dismissals plus real snap-backs would
+        // have tripped the limit already.
+        repeat(Harness.MAX_SNAP_BACK_ATTEMPTS - 1) {
             harness.dismissShade()
             harness.currentElapsedMillis += 1600L // past the 1500ms shade-dismiss grace window
             harness.onWindowStateChanged("com.launcher")
         }
 
-        assertThat(harness.snapBackCount).isEqualTo(3)
+        assertThat(harness.snapBackCount).isEqualTo(Harness.MAX_SNAP_BACK_ATTEMPTS - 1)
         assertThat(harness.forceUnlockTriggered).isFalse()
     }
 }
