@@ -224,6 +224,29 @@ class LockOverlayServiceTest {
 
         fun isCountdownRunning() = isCountdownActive
         fun secondsRemaining() = countdownSecondsRemaining
+
+        /**
+         * Mirrors LockOverlayService.restoreNotification() decision logic — called when
+         * MainActivity.onResume() sends ACTION_RESTORE_NOTIFICATION, e.g. after the user
+         * force-dismissed the "ongoing" notification and reopened the app. Must reassert whichever
+         * notification actually matches the current lock state, not just re-show the last one
+         * built — that's the specific bug class this guards: a stale notification type surviving
+         * a resume after the underlying state changed.
+         */
+        fun restoreNotification() {
+            if (!isServiceRunning) {
+                // Mirrors initService(): process was killed and restarted, so there's no running
+                // service to restore into — start fresh, unlocked, rather than restoring anything.
+                isServiceRunning = true
+                setLockState(LockState.Unlocked)
+                notificationManager.buildUnlockedNotification()
+                return
+            }
+            when (getLockState()) {
+                LockState.Locked -> notificationManager.buildLockedNotification()
+                LockState.Unlocked -> notificationManager.buildUnlockedNotification()
+            }
+        }
     }
 
     // Thin helpers so test bodies don't reference the companion MutableStateFlow directly
@@ -767,5 +790,70 @@ class LockOverlayServiceTest {
 
         verify(exactly = 2) { harness.overlayController.hide() }
         verify(exactly = 3) { harness.overlayController.show(any(), any()) } // startLock() + 2 recoveries
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: restoreNotification() — the resume half of the dismissal/restore round trip (Task 5)
+    // ---------------------------------------------------------------------------
+    //
+    // The full round trip described in the notification-dismissal fix has three parts: (1)
+    // NotificationCompat.setAutoCancel(false) resists a tap-dismiss — a real Notification/
+    // NotificationCompat.Builder behavior, unreachable from a pure JVM unit test without
+    // Robolectric, so not re-verified here; (2) MainActivity.onResume() sends
+    // ACTION_RESTORE_NOTIFICATION, covered by LockRepositoryImplTest; (3) the service reasserts
+    // foreground state with a notification matching current lock state — that's restoreNotification()
+    // below, and it had no coverage at all before this: nothing exercised the decision of *which*
+    // notification a resume-triggered restore rebuilds, which is exactly where a stale notification
+    // surviving a state change would hide.
+
+    @org.junit.Test
+    fun `restoreNotification while locked rebuilds the locked notification`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.restoreNotification()
+
+        verify(exactly = 2) { harness.notificationManager.buildLockedNotification() } // startLock() + restore
+    }
+
+    @org.junit.Test
+    fun `restoreNotification while unlocked rebuilds the unlocked notification, not the locked one`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        harness.restoreNotification()
+
+        verify(exactly = 1) { harness.notificationManager.buildLockedNotification() } // only from startLock()
+        verify(atLeast = 1) { harness.notificationManager.buildUnlockedNotification() }
+    }
+
+    @org.junit.Test
+    fun `restoreNotification initializes the service instead of restoring a stale state when the service isn't running`() {
+        // Simulates the process having been killed and restarted: the service object is fresh
+        // (isServiceRunning = false) but the app is being resumed into it via
+        // ACTION_RESTORE_NOTIFICATION before any INIT/TOGGLE action ever arrives.
+        val harness = ServiceHarness()
+
+        harness.restoreNotification()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify { harness.notificationManager.buildUnlockedNotification() }
+        verify(exactly = 0) { harness.notificationManager.buildLockedNotification() }
+    }
+
+    @org.junit.Test
+    fun `restoreNotification after a full lock cycle correctly reflects the final unlocked state`() {
+        // Guards against reading a stale/cached notification type rather than the live lock state
+        // at the moment of restore — lock, unlock, then restore should reflect Unlocked, not
+        // whatever was last shown while locked.
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        harness.restoreNotification()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify(exactly = 1) { harness.notificationManager.buildLockedNotification() } // only from startLock()
     }
 }

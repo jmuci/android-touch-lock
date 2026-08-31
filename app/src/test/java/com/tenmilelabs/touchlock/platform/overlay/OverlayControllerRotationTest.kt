@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import com.tenmilelabs.touchlock.platform.accessibility.AccessibilityServiceHolder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -294,5 +295,93 @@ class OverlayControllerRotationTest {
     private fun legacyNavigationBarHeightPxForTest(): Int {
         val resourceId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
+    }
+
+    // --- relayoutForCurrentBounds(): a single config change must reposition BOTH windows ---
+    //
+    // show() attaches the main overlay and the nav-bar overlay as two separate windows (see
+    // resolveTarget()'s doc comment for why they're split). A live window doesn't recompute its
+    // own LayoutParams on rotation, so relayoutForCurrentBounds() is what's responsible for
+    // pushing fresh bounds to both — added incrementally in two separate changes (the main
+    // overlay's relayout came first; the nav-bar overlay's was added later, alongside it). Nothing
+    // above exercises them together in one call, which is the actual on-device code path and the
+    // one a future edit to this method could regress by touching only one of the two blocks.
+    //
+    // Bypasses show() entirely (it constructs real Views/addView through a full WindowManager,
+    // which needs the exact same setup as OverlayControllerTest's documented View-construction
+    // limitation) by injecting fake attached-view state directly via reflection, the same
+    // approach LockOverlayServiceTest uses for its own private companion state.
+
+    private fun setPrivateField(name: String, value: Any?) {
+        val field = OverlayController::class.java.getDeclaredField(name)
+        field.isAccessible = true
+        field.set(controller, value)
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun `relayoutForCurrentBounds repositions both the main overlay and the nav-bar overlay together`() {
+        val mainManager = windowManagerReporting(
+            bounds = Rect(0, 0, 2316, 1080),
+            statusBarInsets = Insets.NONE,
+            rotationValue = Surface.ROTATION_90
+        )
+        val navManager = windowManagerReportingNavBar(
+            bounds = Rect(0, 0, 2316, 1080),
+            navBarInsets = Insets.of(0, 0, 48, 0)
+        )
+        val mainView = mockk<OverlayView>(relaxed = true)
+        val navView = mockk<OverlayView>(relaxed = true)
+
+        setPrivateField("overlayView", mainView)
+        setPrivateField("overlayWindowManager", mainManager)
+        setPrivateField("overlayWindowType", WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        setPrivateField("navBarOverlayView", navView)
+        setPrivateField("navBarOverlayWindowManager", navManager)
+
+        controller.relayoutForCurrentBounds()
+
+        verify { mainManager.updateViewLayout(mainView, any()) }
+        verify { navManager.updateViewLayout(navView, any()) }
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun `relayoutForCurrentBounds does not touch the nav-bar manager when no nav-bar overlay is attached`() {
+        // The common case: accessibility disconnected (or never connected), so only the main
+        // overlay exists. Guards the null-safety of the nav-bar block specifically.
+        val mainManager = windowManagerReporting(
+            bounds = Rect(0, 0, 1080, 2316),
+            statusBarInsets = Insets.NONE,
+            rotationValue = Surface.ROTATION_0
+        )
+        val mainView = mockk<OverlayView>(relaxed = true)
+
+        setPrivateField("overlayView", mainView)
+        setPrivateField("overlayWindowManager", mainManager)
+        setPrivateField("overlayWindowType", WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+
+        controller.relayoutForCurrentBounds() // must not throw despite navBarOverlayView being null
+
+        verify { mainManager.updateViewLayout(mainView, any()) }
+    }
+
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    @Test
+    fun `relayoutForCurrentBounds does nothing when no overlay is attached at all`() {
+        // hide() has already cleared every field, or show() was never called — relayout is
+        // reachable here only via a stray config-change callback racing teardown.
+        val navManager = windowManagerReportingNavBar(
+            bounds = Rect(0, 0, 1080, 2316),
+            navBarInsets = Insets.of(0, 0, 0, 63)
+        )
+        setPrivateField("navBarOverlayView", mockk<OverlayView>(relaxed = true))
+        setPrivateField("navBarOverlayWindowManager", navManager)
+        // overlayView left null — the early `val view = overlayView ?: return` must fire first,
+        // before ever reaching the nav-bar block below it.
+
+        controller.relayoutForCurrentBounds()
+
+        verify(exactly = 0) { navManager.updateViewLayout(any(), any()) }
     }
 }

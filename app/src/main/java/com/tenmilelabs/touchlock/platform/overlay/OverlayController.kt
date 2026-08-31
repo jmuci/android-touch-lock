@@ -197,7 +197,8 @@ class OverlayController @Inject constructor(
         configCallbacks = null
     }
 
-    private fun relayoutForCurrentBounds() {
+    @VisibleForTesting
+    internal fun relayoutForCurrentBounds() {
         val view = overlayView ?: return
         val manager = overlayWindowManager ?: return
         val type = overlayWindowType ?: return
