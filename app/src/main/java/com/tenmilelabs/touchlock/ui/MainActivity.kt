@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.tenmilelabs.touchlock.platform.permission.AccessibilityPermissionManager
@@ -51,7 +53,12 @@ class MainActivity : ComponentActivity() {
             // would be light-on-light.
             TouchLockTheme {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    // Exposes Compose testTags as resource-ids in the accessibility tree, which is
+                    // how UI Automator-based tools (Maestro) select elements — without this, every
+                    // testTag in the hierarchy is invisible to them.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics { testTagsAsResourceId = true },
                     color = MaterialTheme.colorScheme.background
                 ) {
                     HomeScreen(

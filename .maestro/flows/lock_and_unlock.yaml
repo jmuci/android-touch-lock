@@ -1,0 +1,50 @@
+# Basic Touch Lock flow: 10s delayed lock -> overlay engages -> unlock via
+# double-tap-then-hold on the unlock handle.
+#
+# Setup (run before `maestro test`, not expressible in the flow itself):
+#   adb shell appops set com.tenmilelabs.touchlock SYSTEM_ALERT_WINDOW allow
+#   adb shell pm grant com.tenmilelabs.touchlock android.permission.POST_NOTIFICATIONS
+#
+# The lock overlay and unlock handle (OverlayView / UnlockHandleView) are raw
+# WindowManager windows, not part of the Activity's Compose tree, so they have
+# no testTag/resource-id to select on. They're addressed by screen point
+# instead: OverlayView is full-screen (any point hits it) and UnlockHandleView
+# is Gravity.CENTER, so 50%,50% reliably lands on both.
+#
+# The locked-state check goes through the notification shade rather than the
+# on-screen "Touch Lock is Active!" card: once the full-screen touch-blocking
+# overlay is up, the app's own Compose hierarchy sits underneath a
+# SYSTEM_ALERT_WINDOW and became flaky to read via UI Automator in practice
+# (state was visibly correct in screenshots while the assertion still failed).
+# The notification is a separate system surface and read reliably.
+
+appId: com.tenmilelabs.touchlock
+---
+- launchApp
+- assertVisible:
+    id: "lock_button"
+
+- tapOn:
+    id: "lock_button"
+
+# COUNTDOWN_DURATION_SECONDS = 10 in LockOverlayService; padded generously for CI/emulator jitter.
+- swipe:
+    start: "50%, 0%"
+    end: "50%, 75%"
+- extendedWaitUntil:
+    visible:
+      text: "Touch Lock active"
+    timeout: 20000
+- back
+
+# Double-tap the (invisible, full-screen) overlay to reveal the unlock handle,
+# then press-and-hold it (PRESS_AND_HOLD_DURATION_MS = 1000ms) to unlock.
+- doubleTapOn:
+    point: "50%, 50%"
+- longPressOn:
+    point: "50%, 50%"
+
+- extendedWaitUntil:
+    visible:
+      id: "lock_button"
+    timeout: 5000
