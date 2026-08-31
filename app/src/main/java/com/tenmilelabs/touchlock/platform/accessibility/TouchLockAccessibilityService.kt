@@ -205,6 +205,10 @@ class TouchLockAccessibilityService : AccessibilityService() {
      * silently disable Strong Lock. Windowing means only a genuine rapid fight with the launcher
      * self-terminates by releasing the lock instead of looping; isolated attempts age out and
      * never accumulate.
+     *
+     * The [MAX_SNAP_BACK_ATTEMPTS]th attempt within the window is the one that force-unlocks (not
+     * the one after it) — e.g. with the default of 3, the first two rapid attempts each relaunch
+     * the protected app and the third force-unlocks instead of relaunching.
      */
     private fun performSnapBack(protectedPackage: String) {
         val now = SystemClock.elapsedRealtime()
@@ -219,7 +223,7 @@ class TouchLockAccessibilityService : AccessibilityService() {
                 "${SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS}ms) to $protectedPackage"
         )
 
-        if (snapBackTimestamps.size > MAX_SNAP_BACK_ATTEMPTS) {
+        if (snapBackTimestamps.size >= MAX_SNAP_BACK_ATTEMPTS) {
             Timber.w("Snap-back limit reached within the rate-limit window, auto-releasing lock")
             triggerForceUnlock()
             return

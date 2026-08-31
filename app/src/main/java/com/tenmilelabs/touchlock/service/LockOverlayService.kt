@@ -147,13 +147,17 @@ class LockOverlayService : LifecycleService() {
 
         if (_lockState.value == LockState.Locked) return
 
+        // Cancel any pending countdown before the permission check below, not after: startLock()
+        // is what the countdown calls when it reaches zero, and cancelCountdown() is what restores
+        // the unlocked notification. Checking permission first left the countdown notification
+        // ("Locking in 1 seconds...") stuck forever whenever permission was revoked mid-countdown,
+        // since the early return below was reached before cancelCountdown() ever ran.
+        cancelCountdown()
+
         if (!permissionManager.hasPermission()) {
             Timber.w("Cannot start lock: overlay permission not granted")
             return
         }
-
-        // Cancel any pending countdown to prevent callbacks from firing
-        cancelCountdown()
 
         if (!isServiceRunning) {
             initService()
