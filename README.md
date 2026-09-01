@@ -153,6 +153,35 @@ di/            → Hilt modules
 
 ---
 
+## Testing
+
+Unit tests run via `./gradlew test`. There's also an end-to-end [Maestro](https://maestro.mobile.dev/)
+flow covering the basic lock/unlock cycle, in [`.maestro/flows/lock_and_unlock.yaml`](.maestro/flows/lock_and_unlock.yaml)
+— it runs automatically on every PR via [`maestro-tests.yml`](.github/workflows/maestro-tests.yml).
+
+To run it locally:
+
+```bash
+# Install the Maestro CLI (one-time)
+curl -Ls "https://get.maestro.mobile.dev" | bash
+
+# Build and install a debug build on a running emulator/device
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# Grant the permissions the flow assumes are already in place (it doesn't
+# drive the system permission dialogs itself)
+adb shell appops set com.tenmilelabs.touchlock SYSTEM_ALERT_WINDOW allow
+adb shell pm grant com.tenmilelabs.touchlock android.permission.POST_NOTIFICATIONS
+
+# Run the flow
+maestro test .maestro/flows/lock_and_unlock.yaml
+```
+
+See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for the broader testing strategy.
+
+---
+
 ## Permissions & Privacy
 
 Touch Lock requests:
