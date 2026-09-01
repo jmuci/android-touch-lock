@@ -41,7 +41,7 @@
     <string name="enable_notifications">Enable Notifications</string>
     <string name="time_locked_today">Time locked today</string>
 
-    <string name="transparent_black_AA">#AA000000</string>
+    <string name="transparent_black_AA" translatable="false">#AA000000</string>
     <string name="countdown_overlay_locking">Locking...</string>
     <string name="unlock_handle_press_and_hold_to_unlock">Press and\nhold to\nunlock</string>
 
