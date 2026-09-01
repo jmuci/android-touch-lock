@@ -216,7 +216,12 @@ internal fun HomeScreenContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            text = stringResource(R.string.build_version_footnote, BuildConfig.GIT_COMMIT_HASH),
+            text = stringResource(
+                R.string.build_version_footnote,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
+                BuildConfig.GIT_COMMIT_HASH
+            ),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -4,7 +4,7 @@
     <!-- Home Screen -->
     <string name="home_title">Touch Lock App</string>
     <string name="home_description">A parent-controlled screen lock that blocks accidental touches — for supervised kids\' use or hands-free video calls.</string>
-    <string name="build_version_footnote">Build %1$s</string>
+    <string name="build_version_footnote">Version: %1$s-%2$d-%3$s</string>
     <string name="privacy_policy_link">Privacy Policy</string>
     <string name="terms_of_use_link">Terms of Use</string>
     <string name="permission_message">Touch Lock needs permission to draw over other apps in order to block touch input.</string>
