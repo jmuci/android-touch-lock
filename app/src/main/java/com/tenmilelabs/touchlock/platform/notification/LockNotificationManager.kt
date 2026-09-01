@@ -74,7 +74,7 @@ class LockNotificationManager @Inject constructor(
             .setContentTitle(context.getString(R.string.notification_locked_title))
             .setContentText(context.getString(lockedText))
             .setContentIntent(togglePendingIntent)
-            .setColor(ContextCompat.getColor(context, R.color.purple_200))
+            .setColor(ContextCompat.getColor(context, R.color.purple_700))
             .setColorized(true) // foreground services only
             .setOnlyAlertOnce(true)
             .setOngoing(true)
