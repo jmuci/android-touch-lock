@@ -33,6 +33,7 @@ class LockPreferences @Inject constructor(
         // Debug-only: Makes overlay visible for lifecycle debugging
         val DEBUG_OVERLAY_VISIBLE = booleanPreferencesKey("debug_overlay_visible")
         val BACKSTOP_TIMEOUT_MINUTES = intPreferencesKey("backstop_timeout_minutes")
+        val LAST_KNOWN_LOCKED = booleanPreferencesKey("last_known_locked")
     }
 
     // Debug-only: Observe overlay visibility setting (for debugging overlay lifecycle issues)
@@ -62,6 +63,22 @@ class LockPreferences @Inject constructor(
     suspend fun setBackstopTimeoutMinutes(minutes: Int) {
         dataStore.edit { preferences ->
             preferences[Keys.BACKSTOP_TIMEOUT_MINUTES] = minutes.coerceIn(1, MAX_BACKSTOP_TIMEOUT_MINUTES)
+        }
+    }
+
+    /**
+     * Last known lock state, persisted across process death. Read once by LockOverlayService when
+     * the system revives it via START_STICKY with no pending intent, to tell a spurious restart
+     * (nothing was actually locked when the process died) from one where the lock was genuinely
+     * in effect.
+     */
+    suspend fun getLastKnownLocked(): Boolean {
+        return dataStore.data.map { preferences -> preferences[Keys.LAST_KNOWN_LOCKED] ?: false }.first()
+    }
+
+    suspend fun setLastKnownLocked(locked: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[Keys.LAST_KNOWN_LOCKED] = locked
         }
     }
 

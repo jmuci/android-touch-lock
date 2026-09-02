@@ -11,4 +11,9 @@ interface ConfigRepository {
     // ceiling — never settable to off/infinite.
     fun observeBackstopTimeoutMinutes(): Flow<Int>
     suspend fun setBackstopTimeoutMinutes(minutes: Int)
+
+    // Last known lock state, persisted across process death so a system-triggered service
+    // restart (START_STICKY) can tell a spurious restart from one where the lock was in effect.
+    suspend fun getLastKnownLocked(): Boolean
+    suspend fun setLastKnownLocked(locked: Boolean)
 }

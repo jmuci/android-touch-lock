@@ -308,6 +308,7 @@ class HomeViewModelTest {
     private class FakeConfigRepository : ConfigRepository {
         private val debugOverlayVisibleFlow = MutableStateFlow(false)
         private val backstopTimeoutMinutesFlow = MutableStateFlow(60)
+        private var lastKnownLocked = false
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> {
             return debugOverlayVisibleFlow
@@ -323,6 +324,12 @@ class HomeViewModelTest {
 
         override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
             backstopTimeoutMinutesFlow.value = minutes
+        }
+
+        override suspend fun getLastKnownLocked(): Boolean = lastKnownLocked
+
+        override suspend fun setLastKnownLocked(locked: Boolean) {
+            lastKnownLocked = locked
         }
     }
 
