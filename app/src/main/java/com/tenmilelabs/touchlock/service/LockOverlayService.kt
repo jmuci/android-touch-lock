@@ -48,6 +48,7 @@ class LockOverlayService : LifecycleService() {
     private var wasAccessibilityConnected = false
     private var countdownJob: Job? = null
     private var backstopTimeoutJob: Job? = null
+    private var idleDismissJob: Job? = null
 
     // Safety valve: screen off always releases suppression, independent of the accessibility
     // service or any other lock-escape mechanism.
@@ -104,6 +105,12 @@ class LockOverlayService : LifecycleService() {
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
         Timber.d("Service initialized: isServiceRunning=$isServiceRunning, lockState=${_lockState.value}")
+
+        // Idle safety valve: if the system revives this service (START_STICKY) after killing the
+        // process, or the app is simply never touched again, the notification would otherwise
+        // persist forever. Self-dismiss after IDLE_DISMISS_TIMEOUT_MINUTES of unlocked inactivity;
+        // startLock()/startDelayedLock() cancel this once real use begins.
+        scheduleIdleDismiss()
 
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
@@ -176,6 +183,7 @@ class LockOverlayService : LifecycleService() {
         )
         _lockState.value = LockState.Locked
         hapticController.vibrateOnLock()
+        cancelIdleDismiss()
 
         // Safety valve: mandatory backstop auto-unlock, regardless of any other escape mechanism.
         backstopTimeoutJob?.cancel()
@@ -203,6 +211,7 @@ class LockOverlayService : LifecycleService() {
 
         _lockState.value = LockState.Unlocked
         hapticController.vibrateOnUnlock()
+        scheduleIdleDismiss()
     }
 
     /**
@@ -256,6 +265,11 @@ class LockOverlayService : LifecycleService() {
         }
 
         assertForegroundState(notification)
+
+        // The app coming to the foreground is a real usage signal; reset the idle clock.
+        if (_lockState.value == LockState.Unlocked) {
+            scheduleIdleDismiss()
+        }
     }
 
     /**
@@ -279,6 +293,7 @@ class LockOverlayService : LifecycleService() {
         if (!isServiceRunning) {
             initService()
         }
+        cancelIdleDismiss()
 
         countdownJob = lifecycleScope.launch {
             var secondsRemaining = COUNTDOWN_DURATION_SECONDS
@@ -320,6 +335,25 @@ class LockOverlayService : LifecycleService() {
 
         // Restore unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
+        scheduleIdleDismiss()
+    }
+
+    /**
+     * Idle safety valve: schedules a self-dismiss after IDLE_DISMISS_TIMEOUT_MINUTES of unlocked
+     * inactivity. Cancels and replaces any previously scheduled dismiss.
+     */
+    private fun scheduleIdleDismiss() {
+        idleDismissJob?.cancel()
+        idleDismissJob = lifecycleScope.launch {
+            delay(IDLE_DISMISS_TIMEOUT_MINUTES * MILLIS_PER_MINUTE)
+            Timber.d("Idle timeout reached ($IDLE_DISMISS_TIMEOUT_MINUTES min unlocked), dismissing service")
+            dismissService()
+        }
+    }
+
+    private fun cancelIdleDismiss() {
+        idleDismissJob?.cancel()
+        idleDismissJob = null
     }
 
     /**
@@ -359,6 +393,8 @@ class LockOverlayService : LifecycleService() {
         countdownJob = null
         backstopTimeoutJob?.cancel()
         backstopTimeoutJob = null
+        idleDismissJob?.cancel()
+        idleDismissJob = null
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (e: IllegalArgumentException) {
@@ -381,6 +417,7 @@ class LockOverlayService : LifecycleService() {
 
         private const val COUNTDOWN_DURATION_SECONDS = 10
         private const val MILLIS_PER_MINUTE = 60_000L
+        private const val IDLE_DISMISS_TIMEOUT_MINUTES = 120L
 
         // This makes the lock state process‑global for the service, rather than tied to a specific instance, making it survive
         // service recreation even if the service is re-started, as long as the app process is alive.
