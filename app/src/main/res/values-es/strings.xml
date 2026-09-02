@@ -1,0 +1,67 @@
+<resources>
+    <string name="app_name">Touch Lock</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">Touch Lock</string>
+    <string name="home_description">Un bloqueo de pantalla controlado por los padres que evita los toques accidentales: ideal para el uso supervisado por niños o videollamadas con manos libres.</string>
+    <string name="build_version_footnote">Compilación %1$s</string>
+    <string name="privacy_policy_link">Política de privacidad</string>
+    <string name="terms_of_use_link">Términos de uso</string>
+    <string name="permission_message">Touch Lock necesita permiso para mostrarse sobre otras aplicaciones y así bloquear la entrada táctil.</string>
+    <string name="grant_permission">Conceder permiso</string>
+    <string name="lock_in_10s">Bloquear en 10 s</string>
+
+    <!-- Active Lock Card -->
+    <string name="content_description_information">Información</string>
+    <string name="active_lock_title">¡Touch Lock está activo!</string>
+    <string name="active_lock_switch_instruction">Cambia a la aplicación que quieras proteger (por ejemplo, YouTube, una videollamada, etc.) antes de bloquear la pantalla.</string>
+    <string name="active_lock_message">La entrada táctil está desactivada. Desbloquea Touch Lock desde la notificación para volver a usar la aplicación.</string>
+
+    <!-- How to Use Card -->
+    <string name="how_to_use_title">Cómo usarlo</string>
+    <string name="how_to_use_step1">1. La notificación de Touch Lock siempre está disponible en tu panel de notificaciones.</string>
+    <string name="how_to_use_step2">2. Abre el vídeo, la llamada o la aplicación que quieras proteger de toques accidentales.</string>
+    <string name="how_to_use_step3">3. Despliega el panel de notificaciones y toca la notificación de Touch Lock.</string>
+    <string name="how_to_use_step4">4. Un solo toque bloquea o desbloquea al instante, sin necesidad de desplegarla.</string>
+
+    <string name="notifications_disabled_warning">⚠️ Notificaciones desactivadas</string>
+    <string name="notifications_disabled_availability">Las notificaciones de Touch Lock están desactivadas. Actívalas para bloquear o desbloquear desde el panel de notificaciones.</string>
+    <string name="notifications_availability_channel_blocked">El canal de notificaciones de Touch Lock está bloqueado. Actívalo para bloquear o desbloquear desde el panel de notificaciones.</string>
+    <string name="notifications_availability_enabled">Las notificaciones funcionan correctamente.</string>
+    <!-- Notification Strings -->
+    <string name="notification_unlocked_title">Touch Lock listo</string>
+    <string name="notification_unlocked_text">Toca para bloquear</string>
+    <string name="notification_locked_title">Touch Lock activo</string>
+    <string name="notification_locked_text">Toca para desbloquear</string>
+    <string name="notification_locked_text_strong_lock">Mantén pulsado Subir y Bajar volumen durante 3 s para desbloquear</string>
+    <string name="notification_countdown_title">Cuenta atrás de Touch Lock</string>
+    <string name="notification_countdown_text">Bloqueando en %d segundos…</string>
+
+    <!-- UI Strings -->
+    <string name="enable_notifications">Activar notificaciones</string>
+    <string name="time_locked_today">Tiempo bloqueado hoy</string>
+
+    <string name="countdown_overlay_locking">Bloqueando…</string>
+    <string name="unlock_handle_press_and_hold_to_unlock">Mantén\npulsado para\ndesbloquear</string>
+
+    <!-- Strong Lock (accessibility) -->
+    <string name="accessibility_service_description">Se usa solo mientras Touch Lock está activo, para bloquear los toques en la barra de navegación, cerrar el panel de notificaciones si se abre y volver a traer al frente la aplicación protegida si sales de ella. Nunca lee ni comparte lo que hay en tu pantalla.</string>
+
+    <string name="strong_lock_upsell_title">Bloqueo a prueba de niños disponible</string>
+    <string name="strong_lock_upsell_description">También bloquea los toques en la barra de navegación y vuelve a abrir automáticamente la aplicación bloqueada si se desliza fuera. Es opcional, está desactivado por defecto y no sustituye la supervisión.</string>
+    <string name="strong_lock_upsell_learn_more">Más información</string>
+
+    <string name="strong_lock_disclosure_title">¿Activar el Bloqueo a prueba de niños?</string>
+    <string name="strong_lock_disclosure_what_it_does_title">Qué hace el Bloqueo a prueba de niños</string>
+    <string name="strong_lock_disclosure_what_it_does_body">El Bloqueo a prueba de niños usa un servicio de accesibilidad de Android para reforzar Touch Lock mientras está activo: bloquea los toques en la barra de navegación (Inicio, Atrás, Recientes), cierra el panel de notificaciones si se despliega y vuelve a traer al frente la aplicación protegida si se navega fuera de ella.</string>
+    <string name="strong_lock_disclosure_data_title">Qué datos utiliza</string>
+    <string name="strong_lock_disclosure_data_body">Mientras está activo, el servicio recibe eventos de cambio de ventana que contienen el nombre del paquete de la aplicación en primer plano (por ejemplo, \"com.google.android.youtube\"). No lee texto, imágenes ni ningún otro contenido en pantalla, y no requiere exploración táctil ni acceso al contenido de la pantalla.</string>
+    <string name="strong_lock_disclosure_sharing_title">Cómo se usa y se comparte</string>
+    <string name="strong_lock_disclosure_sharing_body">Esta información se usa únicamente para mantener la aplicación protegida en primer plano mientras Touch Lock está activo. Se procesa por completo en tu dispositivo y nunca se transmite, se almacena de forma remota ni se comparte con nadie.</string>
+    <string name="strong_lock_disclosure_shortcut_title">Una cosa más</string>
+    <string name="strong_lock_disclosure_shortcut_body">En la siguiente pantalla, activa solo el interruptor principal. Omite \"Acceso directo\": activarlo permitiría desactivar Touch Lock con una pulsación rápida del botón de volumen, lo que anularía el propósito del Bloqueo a prueba de niños.</string>
+    <string name="strong_lock_disclosure_supervision_title">Ten en cuenta</string>
+    <string name="strong_lock_disclosure_supervision_body">El Bloqueo a prueba de niños es una ayuda de seguridad, no un sustituto de la supervisión. Ningún bloqueo puede garantizar que se impida cada toque, deslizamiento o pulsación de un botón físico en todos los dispositivos. Mantén a tu hijo o hija a la vista y al alcance del oído mientras el dispositivo esté bloqueado, igual que con cualquier pantalla que le entregues.</string>
+    <string name="strong_lock_disclosure_decline">Ahora no</string>
+    <string name="strong_lock_disclosure_continue">Continuar a Ajustes</string>
+</resources>
