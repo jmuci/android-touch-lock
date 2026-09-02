@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * - Rapid toggle safety: pending countdown callbacks are cleared on state transitions.
  * - Config reads: orientation mode is read from ConfigRepository on lock.
  * - Notification types: correct notification builder is called per state.
+ * - Lock transition animation: played on both startLock() and stopLock(), never on a failed
+ *   attach or a no-op call.
  */
 class LockOverlayServiceTest {
 
@@ -134,6 +136,7 @@ class LockOverlayServiceTest {
             val attached = overlayController.show(false) {}
             if (!attached) return
 
+            overlayController.playLockTransition()
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
             isBackstopTimeoutScheduled = true
@@ -147,6 +150,7 @@ class LockOverlayServiceTest {
             cancelCountdown()
             isBackstopTimeoutScheduled = false
             overlayController.hide()
+            overlayController.playLockTransition()
             notificationManager.buildUnlockedNotification()
             setLockState(LockState.Unlocked)
         }
@@ -316,6 +320,23 @@ class LockOverlayServiceTest {
         verify { harness.notificationManager.buildLockedNotification() }
     }
 
+    @org.junit.Test
+    fun `startLock plays the lock transition animation`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        verify { harness.overlayController.playLockTransition() }
+    }
+
+    @org.junit.Test
+    fun `startLock does not play the lock transition animation when the overlay fails to attach`() {
+        val harness = ServiceHarness()
+        every { harness.overlayController.show(any(), any()) } returns false
+
+        harness.startLock()
+
+        verify(exactly = 0) { harness.overlayController.playLockTransition() }
+    }
+
     // ---------------------------------------------------------------------------
     // Tests: stopLock
     // ---------------------------------------------------------------------------
@@ -342,6 +363,25 @@ class LockOverlayServiceTest {
         harness.startLock()
         harness.stopLock()
         verify { harness.overlayController.hide() }
+    }
+
+    @org.junit.Test
+    fun `stopLock plays the lock transition animation, same as startLock`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.stopLock()
+
+        // Once from startLock(), once from stopLock() — the transition is symmetric across both
+        // directions, not lock-only.
+        verify(exactly = 2) { harness.overlayController.playLockTransition() }
+    }
+
+    @org.junit.Test
+    fun `stopLock does not play the lock transition animation when already unlocked`() {
+        val harness = ServiceHarness()
+        harness.stopLock() // no-op: already Unlocked
+        verify(exactly = 0) { harness.overlayController.playLockTransition() }
     }
 
     @org.junit.Test

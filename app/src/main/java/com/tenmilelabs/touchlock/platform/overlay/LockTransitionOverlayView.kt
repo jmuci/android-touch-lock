@@ -18,8 +18,31 @@ import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
+import androidx.annotation.VisibleForTesting
 import com.tenmilelabs.touchlock.R
 import timber.log.Timber
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
+
+/**
+ * The extra travel margin (in px) a [width] x [height] rectangle's sweep needs on each end so
+ * that, once rotated by [angleDegrees] about its own center, it still starts and ends fully
+ * off-screen — i.e. half of how much taller the rotated bounding box is than the original height.
+ *
+ * Extracted as a standalone, pure function so it's directly unit-testable: this is the exact
+ * calculation an earlier version got wrong, using a blanket `width + height` safety margin
+ * (~3500px on a typical phone) where the real rotated screen only needs ~200-300px. That meant
+ * [GlassGlintView]'s sweep spent roughly 70% of its animated duration sitting fully off-screen,
+ * before and after a brief crossing buried in the middle — which read, both live and in
+ * screenshots, as the glint simply not rendering at all.
+ */
+@VisibleForTesting
+internal fun rotatedVerticalMarginPx(width: Int, height: Int, angleDegrees: Float): Float {
+    val angleRad = Math.toRadians(angleDegrees.toDouble())
+    val rotatedBoundingHeight = width * abs(sin(angleRad)) + height * abs(cos(angleRad))
+    return ((rotatedBoundingHeight - height) / 2).toFloat().coerceAtLeast(0f)
+}
 
 /**
  * Purely decorative, non-touchable overlay that plays a diagonal glass-glint sweep plus a brief
@@ -156,10 +179,7 @@ class LockTransitionOverlayView(context: Context) : FrameLayout(context) {
                 HALO_HEIGHT_DP,
                 resources.displayMetrics
             )
-            val angleRad = Math.toRadians(GLINT_ANGLE_DEGREES.toDouble())
-            val rotatedBoundingHeight = w * kotlin.math.abs(kotlin.math.sin(angleRad)) +
-                h * kotlin.math.abs(kotlin.math.cos(angleRad))
-            verticalMarginPx = ((rotatedBoundingHeight - h) / 2).toFloat().coerceAtLeast(0f)
+            verticalMarginPx = rotatedVerticalMarginPx(w, h, GLINT_ANGLE_DEGREES)
             paint.shader = LinearGradient(
                 0f, 0f, 0f, haloHeightPx,
                 intArrayOf(TRANSPARENT, HALO_WHITE, CORE_WHITE, CORE_WHITE, HALO_WHITE, TRANSPARENT),
