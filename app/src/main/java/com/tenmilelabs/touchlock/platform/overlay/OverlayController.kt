@@ -69,6 +69,9 @@ class OverlayController @Inject constructor(
     private var navBarOverlayView: OverlayView? = null
     private var navBarOverlayWindowManager: WindowManager? = null
 
+    private var lockTransitionView: LockTransitionOverlayView? = null
+    private var lockTransitionWindowManager: WindowManager? = null
+
     /**
      * Resolves the connected accessibility service's own WindowManager + TYPE_ACCESSIBILITY_OVERLAY
      * (needed to cover the navigation bar — adding a 2032 window via the app's own WindowManager
@@ -223,6 +226,10 @@ class OverlayController @Inject constructor(
     }
 
     fun hide() {
+        // Defensive: drop any in-flight lock transition first, so it never outlives the overlay
+        // it was animating over (e.g. a fast lock-then-unlock cutting the lock animation short).
+        hideLockTransition()
+
         // Clean up countdown overlay first
         hideCountdownOverlay()
 
@@ -294,6 +301,51 @@ class OverlayController @Inject constructor(
         countdownOverlayView = null
         countdownWindowManager = null
     }
+
+    /**
+     * Plays a brief, purely decorative shimmer sweep + center app-icon fade over the current
+     * screen, to make a lock/unlock transition visually obvious. Added as its own transient
+     * window — FLAG_NOT_TOUCHABLE, so it never intercepts input regardless of lock state — and
+     * self-removes once the animation finishes. Callers decide when a transition actually
+     * happened (see [com.tenmilelabs.touchlock.service.LockOverlayService].startLock/stopLock);
+     * this method has no opinion on lock state itself.
+     */
+    fun playLockTransition() {
+        hideLockTransition()
+
+        val view = LockTransitionOverlayView(context)
+        try {
+            appWindowManager.addView(view, lockTransitionLayoutParams())
+            lockTransitionView = view
+            lockTransitionWindowManager = appWindowManager
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to add lock transition overlay view")
+            return
+        }
+
+        view.start(onComplete = { hideLockTransition() })
+    }
+
+    private fun hideLockTransition() {
+        lockTransitionView?.let {
+            it.cleanup()
+            try {
+                (lockTransitionWindowManager ?: appWindowManager).removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove lock transition overlay view")
+            }
+        }
+        lockTransitionView = null
+        lockTransitionWindowManager = null
+    }
+
+    // Never nav-bar-adjacent, same as the main touch-blocking overlay — reuses its exact bounds
+    // computation (see fullScreenLayoutParams's doc comment) and only adds FLAG_NOT_TOUCHABLE on
+    // top, since this window is decorative and must never intercept input.
+    private fun lockTransitionLayoutParams(): WindowManager.LayoutParams =
+        fullScreenLayoutParams(appWindowManager, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY).apply {
+            flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
 
     private fun showUnlockHandle(onUnlockRequested: () -> Unit) {
         // Remove existing handle if present

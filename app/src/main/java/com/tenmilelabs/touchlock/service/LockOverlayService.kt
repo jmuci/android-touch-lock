@@ -194,6 +194,7 @@ class LockOverlayService : LifecycleService() {
             Timber.e("startLock: overlay addView failed; aborting lock")
             return
         }
+        overlayController.playLockTransition()
         assertForegroundState(
             notificationManager.buildLockedNotification(accessibilityServiceHolder.isConnected.value)
         )
@@ -222,6 +223,7 @@ class LockOverlayService : LifecycleService() {
         backstopTimeoutJob = null
 
         overlayController.hide()
+        overlayController.playLockTransition()
 
         // Reassert foreground state with unlocked notification
         assertForegroundState(notificationManager.buildUnlockedNotification())
