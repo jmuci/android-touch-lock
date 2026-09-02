@@ -76,11 +76,26 @@ class LockOverlayService : LifecycleService() {
             ACTION_DISMISS -> dismissService()
             ACTION_FORCE_UNLOCK -> forceUnlock()
             null -> {
-                // Service restarted by system (START_STICKY)
-                // Re-initialize with idle (unlocked) state. Configuration is persisted in DataStore.
-                // This prevents unintended auto-locking after system restart while preserving settings.
-                Timber.d("onStartCommand called with null action (system restart), re-initializing to unlocked state")
-                initService()
+                // Service restarted by system (START_STICKY) with no pending intent to redeliver.
+                // We don't know how long the process was dead, so check what it was actually doing
+                // when it died: if nothing was locked, this restart is spurious — there's nothing
+                // to protect, and resurrecting the notification here is exactly the "it popped up
+                // on its own" bug. Satisfy the startForeground() contract Android imposes on this
+                // kind of restart, then immediately tear back down instead of leaving it running.
+                // If it *was* locked, we don't know whether that was seconds or hours before the
+                // kill, so keep behaving as a safety net: re-initialize to unlocked (deliberately
+                // not auto-re-locking — see initService() below) and let the idle timer bound it.
+                Timber.d("onStartCommand called with null action (system restart)")
+                lifecycleScope.launch {
+                    if (configRepository.getLastKnownLocked()) {
+                        Timber.d("Last known state was Locked; re-initializing as a safety net")
+                        initService()
+                    } else {
+                        Timber.d("Last known state was Unlocked; spurious restart, dismissing immediately")
+                        assertForegroundState(notificationManager.buildUnlockedNotification())
+                        dismissService()
+                    }
+                }
             }
         }
         return START_STICKY
@@ -104,6 +119,7 @@ class LockOverlayService : LifecycleService() {
         }
         isServiceRunning = true
         _lockState.value = LockState.Unlocked
+        persistLastKnownLocked(false)
         Timber.d("Service initialized: isServiceRunning=$isServiceRunning, lockState=${_lockState.value}")
 
         // Idle safety valve: if the system revives this service (START_STICKY) after killing the
@@ -182,6 +198,7 @@ class LockOverlayService : LifecycleService() {
             notificationManager.buildLockedNotification(accessibilityServiceHolder.isConnected.value)
         )
         _lockState.value = LockState.Locked
+        persistLastKnownLocked(true)
         hapticController.vibrateOnLock()
         cancelIdleDismiss()
 
@@ -210,6 +227,7 @@ class LockOverlayService : LifecycleService() {
         assertForegroundState(notificationManager.buildUnlockedNotification())
 
         _lockState.value = LockState.Unlocked
+        persistLastKnownLocked(false)
         hapticController.vibrateOnUnlock()
         scheduleIdleDismiss()
     }
@@ -357,6 +375,16 @@ class LockOverlayService : LifecycleService() {
     }
 
     /**
+     * Persists the current lock state so a future START_STICKY restart (which delivers a null
+     * Intent, with no memory of what this process was doing before it died) can tell a spurious
+     * restart from one where the lock was genuinely in effect. Fire-and-forget: best effort is
+     * enough here, this is a bound on stray notification lifetime, not a correctness guarantee.
+     */
+    private fun persistLastKnownLocked(locked: Boolean) {
+        lifecycleScope.launch { configRepository.setLastKnownLocked(locked) }
+    }
+
+    /**
      * Helper method to consistently assert foreground state.
      * Always use this instead of NotificationManager.notify() for foreground service notifications.
      */
@@ -380,6 +408,7 @@ class LockOverlayService : LifecycleService() {
         overlayController.hide()
         stopForeground(STOP_FOREGROUND_REMOVE)
         _lockState.value = LockState.Unlocked
+        persistLastKnownLocked(false)
         isServiceRunning = false
         stopSelf()
         Timber.d("Service dismissed")

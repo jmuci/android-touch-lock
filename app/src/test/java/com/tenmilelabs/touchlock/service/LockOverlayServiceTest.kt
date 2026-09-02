@@ -12,6 +12,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 
 /**
  * Unit tests for [LockOverlayService] state machine logic.
@@ -52,9 +53,11 @@ class LockOverlayServiceTest {
     private class FakeConfigRepository(
         initialDebugVisible: Boolean = false,
         initialBackstopTimeoutMinutes: Int = 60,
+        initialLastKnownLocked: Boolean = false,
     ) : ConfigRepository {
         private val debugFlow = MutableStateFlow(initialDebugVisible)
         private val backstopTimeoutFlow = MutableStateFlow(initialBackstopTimeoutMinutes)
+        private var lastKnownLocked = initialLastKnownLocked
 
         override fun observeDebugOverlayVisible(): Flow<Boolean> = debugFlow
 
@@ -68,8 +71,17 @@ class LockOverlayServiceTest {
             backstopTimeoutFlow.value = minutes
         }
 
+        override suspend fun getLastKnownLocked(): Boolean = lastKnownLocked
+
+        override suspend fun setLastKnownLocked(locked: Boolean) {
+            lastKnownLocked = locked
+        }
+
         /** Test-only synchronous accessor, mirroring what a real collector would already hold. */
         fun currentBackstopTimeoutMinutes(): Int = backstopTimeoutFlow.value
+
+        /** Test-only synchronous accessor for the persisted last-known-locked flag. */
+        fun currentLastKnownLocked(): Boolean = lastKnownLocked
     }
 
     /**
@@ -130,6 +142,7 @@ class LockOverlayServiceTest {
             if (!isServiceRunning) {
                 isServiceRunning = true
                 setLockState(LockState.Unlocked) // initService sets Unlocked
+                persistLastKnownLocked(false) // mirrors initService()
                 scheduleIdleDismiss() // mirrors initService()'s unconditional scheduleIdleDismiss()
             }
 
@@ -141,6 +154,7 @@ class LockOverlayServiceTest {
 
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
+            persistLastKnownLocked(true)
             cancelIdleDismiss()
             isBackstopTimeoutScheduled = true
             lastScheduledBackstopTimeoutMinutes = configRepository.currentBackstopTimeoutMinutes()
@@ -155,7 +169,30 @@ class LockOverlayServiceTest {
             overlayController.hide()
             notificationManager.buildUnlockedNotification()
             setLockState(LockState.Unlocked)
+            persistLastKnownLocked(false)
             scheduleIdleDismiss()
+        }
+
+        /** Mirrors LockOverlayService.persistLastKnownLocked(). */
+        fun persistLastKnownLocked(locked: Boolean) {
+            runBlocking { configRepository.setLastKnownLocked(locked) }
+        }
+
+        /**
+         * Mirrors the null-action branch of onStartCommand: the system revived the service via
+         * START_STICKY with no pending intent, so the only signal available is whatever was last
+         * persisted before the process died.
+         */
+        fun systemRestart() {
+            val wasLocked = runBlocking { configRepository.getLastKnownLocked() }
+            if (wasLocked) {
+                isServiceRunning = true
+                setLockState(LockState.Unlocked)
+                scheduleIdleDismiss()
+            } else {
+                notificationManager.buildUnlockedNotification()
+                dismissService()
+            }
         }
 
         /**
@@ -187,6 +224,7 @@ class LockOverlayServiceTest {
             isBackstopTimeoutScheduled = false
             isIdleDismissScheduled = false
             setLockState(LockState.Unlocked)
+            persistLastKnownLocked(false)
         }
 
         /** Mirrors LockOverlayService.forceUnlock() decision logic: always delegates to stopLock(). */
@@ -283,6 +321,7 @@ class LockOverlayServiceTest {
                 isServiceRunning = true
                 setLockState(LockState.Unlocked)
                 notificationManager.buildUnlockedNotification()
+                persistLastKnownLocked(false)
                 scheduleIdleDismiss()
                 return
             }
@@ -1028,5 +1067,69 @@ class LockOverlayServiceTest {
         harness.restoreNotification()
 
         assertThat(harness.isIdleDismissScheduled()).isFalse()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: system-triggered restart (null-action onStartCommand) checks persisted lock state
+    // ---------------------------------------------------------------------------
+    //
+    // The idle-dismiss timer above bounds a *live* service's notification lifetime, but it lives
+    // in memory: if the OS kills the process outright, the timer dies with it and a later
+    // START_STICKY restart starts a fresh one, with no memory of how long the process was
+    // actually idle beforehand. These tests cover the persisted last-known-lock-state check that
+    // closes that gap: a restart after the process died while Unlocked has nothing to protect and
+    // must not resurrect the notification at all, while a restart after dying while Locked keeps
+    // behaving as a safety net, since there's no way to know how long ago that lock happened.
+
+    @org.junit.Test
+    fun `system restart after dying while unlocked does not resurrect the service`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock() // persists last-known-locked = false, then the process "dies"
+
+        harness.systemRestart()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify { harness.overlayController.hide() }
+    }
+
+    @org.junit.Test
+    fun `system restart after dying while locked re-initializes as a safety net`() {
+        val harness = ServiceHarness()
+        harness.startLock() // persists last-known-locked = true, then the process "dies"
+
+        harness.systemRestart()
+
+        // Deliberately resets to Unlocked rather than silently re-engaging the lock (see
+        // startLock()'s existing "prevents unintended auto-locking" comment) — but the service
+        // itself comes back, preserving the notification-as-safety-net behavior.
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `a spurious system restart does not schedule a fresh idle dismiss window`() {
+        // Guards against silently falling back to "always re-initialize": if this regressed to
+        // calling scheduleIdleDismiss() unconditionally, a spurious restart would still buy the
+        // notification a fresh 2 hours of unwanted lifetime instead of tearing down immediately.
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        harness.systemRestart()
+
+        assertThat(harness.isIdleDismissScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `fresh install with no persisted lock state treats a restart as spurious`() {
+        // No lock ever happened, so there's no persisted "true" to find — the default must be the
+        // safe (spurious-restart) branch, not the safety-net one.
+        val harness = ServiceHarness()
+
+        harness.systemRestart()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify { harness.overlayController.hide() }
     }
 }

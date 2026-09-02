@@ -26,4 +26,12 @@ class ConfigRepositoryImpl @Inject constructor(
     override suspend fun setBackstopTimeoutMinutes(minutes: Int) {
         lockPreferences.setBackstopTimeoutMinutes(minutes)
     }
+
+    override suspend fun getLastKnownLocked(): Boolean {
+        return lockPreferences.getLastKnownLocked()
+    }
+
+    override suspend fun setLastKnownLocked(locked: Boolean) {
+        lockPreferences.setLastKnownLocked(locked)
+    }
 }
