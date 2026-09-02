@@ -39,6 +39,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * - Rapid toggle safety: pending countdown callbacks are cleared on state transitions.
  * - Config reads: orientation mode is read from ConfigRepository on lock.
  * - Notification types: correct notification builder is called per state.
+ * - Idle self-dismiss: the service tears itself down after prolonged unlocked inactivity,
+ *   which also breaks the START_STICKY chain that could otherwise let the OS silently
+ *   resurrect the service (and its notification) with no user action involved.
  */
 class LockOverlayServiceTest {
 
@@ -92,6 +95,7 @@ class LockOverlayServiceTest {
         private var isCountdownActive = false
         private var countdownSecondsRemaining = 0
         private var isBackstopTimeoutScheduled = false
+        private var isIdleDismissScheduled = false
         private var wasAccessibilityConnected = false
         private val fakeNotification: Notification = mockk(relaxed = true)
 
@@ -126,6 +130,7 @@ class LockOverlayServiceTest {
             if (!isServiceRunning) {
                 isServiceRunning = true
                 setLockState(LockState.Unlocked) // initService sets Unlocked
+                scheduleIdleDismiss() // mirrors initService()'s unconditional scheduleIdleDismiss()
             }
 
             // Mirrors startLock()'s `if (!attached) { ...; return }` guard: addView can fail (e.g.
@@ -136,6 +141,7 @@ class LockOverlayServiceTest {
 
             notificationManager.buildLockedNotification()
             setLockState(LockState.Locked)
+            cancelIdleDismiss()
             isBackstopTimeoutScheduled = true
             lastScheduledBackstopTimeoutMinutes = configRepository.currentBackstopTimeoutMinutes()
         }
@@ -148,6 +154,38 @@ class LockOverlayServiceTest {
             isBackstopTimeoutScheduled = false
             overlayController.hide()
             notificationManager.buildUnlockedNotification()
+            setLockState(LockState.Unlocked)
+            scheduleIdleDismiss()
+        }
+
+        /**
+         * Mirrors LockOverlayService's idle safety valve: after IDLE_DISMISS_TIMEOUT_MINUTES of
+         * unlocked inactivity the service self-dismisses. This is what actually breaks the
+         * START_STICKY chain that otherwise lets the OS silently resurrect the service (and its
+         * notification) hours or days after the process was killed, with no user action involved.
+         */
+        fun scheduleIdleDismiss() {
+            isIdleDismissScheduled = true
+        }
+
+        fun cancelIdleDismiss() {
+            isIdleDismissScheduled = false
+        }
+
+        fun isIdleDismissScheduled() = isIdleDismissScheduled
+
+        /** Simulates the idle-dismiss timer firing (as the delayed coroutine would). */
+        fun triggerIdleDismiss() {
+            if (!isIdleDismissScheduled) return
+            dismissService()
+        }
+
+        /** Mirrors LockOverlayService.dismissService() decision logic. */
+        fun dismissService() {
+            overlayController.hide()
+            isServiceRunning = false
+            isBackstopTimeoutScheduled = false
+            isIdleDismissScheduled = false
             setLockState(LockState.Unlocked)
         }
 
@@ -188,7 +226,11 @@ class LockOverlayServiceTest {
             if (getLockState() == LockState.Locked) return
             if (!permissionManager.hasPermission()) return
 
-            if (!isServiceRunning) isServiceRunning = true
+            if (!isServiceRunning) {
+                isServiceRunning = true
+                scheduleIdleDismiss() // mirrors initService()
+            }
+            cancelIdleDismiss()
 
             isCountdownActive = true
             countdownSecondsRemaining = durationSeconds
@@ -220,6 +262,7 @@ class LockOverlayServiceTest {
             isCountdownActive = false
             overlayController.hideCountdownOverlay()
             notificationManager.buildUnlockedNotification()
+            scheduleIdleDismiss()
         }
 
         fun isCountdownRunning() = isCountdownActive
@@ -240,11 +283,15 @@ class LockOverlayServiceTest {
                 isServiceRunning = true
                 setLockState(LockState.Unlocked)
                 notificationManager.buildUnlockedNotification()
+                scheduleIdleDismiss()
                 return
             }
             when (getLockState()) {
                 LockState.Locked -> notificationManager.buildLockedNotification()
                 LockState.Unlocked -> notificationManager.buildUnlockedNotification()
+            }
+            if (getLockState() == LockState.Unlocked) {
+                scheduleIdleDismiss() // resume is a real usage signal — resets the idle clock
             }
         }
     }
@@ -855,5 +902,131 @@ class LockOverlayServiceTest {
 
         assertThat(getLockState()).isEqualTo(LockState.Unlocked)
         verify(exactly = 1) { harness.notificationManager.buildLockedNotification() } // only from startLock()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tests: idle self-dismiss safety valve
+    // ---------------------------------------------------------------------------
+    //
+    // Root cause under test: LockOverlayService returns START_STICKY, so if the OS kills the
+    // process under memory pressure the system can restart the service later — at a time of its
+    // own choosing, possibly hours or days on — with a null Intent. That path re-initializes the
+    // service and shows the "unlocked" notification with no user action involved, which is
+    // exactly the "notification appeared on its own" symptom being fixed. The idle-dismiss timer
+    // bounds how long an unlocked, untouched service notification can persist and, by fully
+    // stopping the service (not just hiding the notification), breaks the sticky-restart chain
+    // so the OS has nothing left to resurrect.
+
+    @org.junit.Test
+    fun `idle dismiss is scheduled once the service first initializes`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock() // back to a plain unlocked-and-idle state
+
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `startLock cancels the idle dismiss timer once locked`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        assertThat(harness.isIdleDismissScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `stopLock reschedules the idle dismiss timer`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `startDelayedLock cancels the idle dismiss timer while a countdown is in progress`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+
+        harness.startDelayedLock(durationSeconds = 5)
+
+        assertThat(harness.isIdleDismissScheduled()).isFalse()
+    }
+
+    @org.junit.Test
+    fun `cancelling a countdown reschedules the idle dismiss timer`() {
+        val harness = ServiceHarness()
+        harness.startDelayedLock(durationSeconds = 5)
+
+        harness.cancelCountdown()
+
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `idle dismiss firing while unlocked stops the service and hides the notification`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+
+        harness.triggerIdleDismiss()
+
+        verify { harness.overlayController.hide() }
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+    }
+
+    @org.junit.Test
+    fun `idle dismiss is a no-op once the lock re-engages before it fires`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+        harness.startLock() // re-locked before the idle timer would have fired
+
+        harness.triggerIdleDismiss()
+
+        // Re-locking cancels the pending idle-dismiss job; a stale trigger must not tear down an
+        // active lock.
+        assertThat(getLockState()).isEqualTo(LockState.Locked)
+    }
+
+    @org.junit.Test
+    fun `a system restart with no prior user action schedules idle dismiss, which eventually self-dismisses`() {
+        // Simulates the actual bug: the process was killed by the OS and later revived via
+        // START_STICKY (modeled here the same way as the existing "service isn't running" restore
+        // test — restoreNotification()/initService() runs with no preceding user action). Before
+        // this fix, the service would show the notification and never take itself down again.
+        val harness = ServiceHarness()
+
+        harness.restoreNotification() // mirrors the null-action / no-op restart path
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+
+        harness.triggerIdleDismiss()
+
+        assertThat(getLockState()).isEqualTo(LockState.Unlocked)
+        verify { harness.overlayController.hide() }
+    }
+
+    @org.junit.Test
+    fun `restoreNotification while unlocked resets the idle dismiss clock`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+        harness.stopLock()
+        harness.cancelIdleDismiss() // simulate time having already elapsed toward the old deadline
+
+        harness.restoreNotification()
+
+        assertThat(harness.isIdleDismissScheduled()).isTrue()
+    }
+
+    @org.junit.Test
+    fun `restoreNotification while locked does not schedule an idle dismiss`() {
+        val harness = ServiceHarness()
+        harness.startLock()
+
+        harness.restoreNotification()
+
+        assertThat(harness.isIdleDismissScheduled()).isFalse()
     }
 }
