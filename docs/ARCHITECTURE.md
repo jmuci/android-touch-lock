@@ -337,6 +337,38 @@ Users can force-swipe "ongoing" notifications on Android 12+. Mitigations:
 
 If the app is never brought to foreground after notification dismissal, the service remains running (it's still foreground) but the notification is gone. This is a known Android 12+ platform limitation.
 
+### Focusable System UI Sits on Top of the Overlay, and Can Even Hide It Entirely
+
+Any focusable system `Activity` (an incoming/outgoing call UI, a permission dialog, a `ResolverActivity`
+disambiguation sheet) draws on top of the `FLAG_NOT_FOCUSABLE` main overlay and receives touches
+normally, regardless of lock state — confirmed on-device with a real call-intent resolver sheet.
+This is the same tradeoff as "System Bars Remain Accessible" above, just for foreground Activities
+instead of system bars, and is directly relevant to the "hands-free video call" use case: a real
+incoming call's UI is fully answerable/dialable despite the lock being active.
+
+Separately, and specific to **Strong Lock**: Android's own anti-tapjacking protection fully hides an
+app's `SYSTEM_ALERT_WINDOW`/`TYPE_APPLICATION_OVERLAY` window whenever system Settings is the
+foreground app (`dumpsys window` shows `mForceHideNonSystemOverlayWindow=true` for the main overlay in
+this state) — confirmed on-device. Since Settings is deliberately allowlisted (BACK must stay
+functional there, so the user isn't trapped configuring Strong Lock), a user who ends up in Settings
+while locked gets a fully touchable, unblocked Settings screen — only the separate nav-bar strip
+(`TYPE_ACCESSIBILITY_OVERLAY`, not subject to this OS restriction) stays blocked. This is a platform
+restriction on the overlay window type itself, not something the app can override.
+
+### Revoking `POST_NOTIFICATIONS` While Locked Silently Releases the Lock
+
+Revoking notification permission while locked (`pm revoke ... POST_NOTIFICATIONS`, or the equivalent
+Settings toggle) triggers the OS to force-kill the app process as part of permission-cache
+invalidation — confirmed on-device via logcat, this is standard Android behavior, not
+app-triggered. The service restarts via `START_STICKY` with a null intent, takes the safety-net
+branch in `onStartCommand()` (deliberately does not auto-re-lock — see the comment there), and the
+fallback notification itself is suppressed by the OS since the permission is gone. Net effect: the
+lock is silently released with no visible signal to the supervising parent, since the one channel
+that would show a signal (the notification) is exactly what's missing. This is a side effect of two
+independently-reasonable, already-documented choices (don't auto-relock on an ambiguous restart; OS
+suppresses notifications without permission) rather than an app bug, and isn't fixed here — flagged
+as a known, low-probability edge case (requires deliberately revoking a permission while locked).
+
 ### Double-Tap Threshold is Fixed
 
 The 400ms double-tap window in `OverlayView` is hardcoded. This may be too fast for some users (especially children's parents with slower tapping). A future improvement could make this configurable or use `ViewConfiguration.getDoubleTapTimeout()`.

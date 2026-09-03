@@ -75,16 +75,45 @@ class TouchLockAccessibilityService : AccessibilityService() {
     // snap-back purposes.
     private var suppressSnapBackUntilElapsedMillis = 0L
 
+    // Resolved once and cached: the default launcher's package, used to scope the grace-window
+    // suppression above to plausible self-action side effects only (see its call site).
+    private val homePackage: String? by lazy {
+        packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            0
+        )?.activityInfo?.packageName
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Timber.d("TouchLockAccessibilityService connected")
         holder.attach(this)
+
+        // Seed from the live foreground window rather than waiting passively for the next
+        // TYPE_WINDOW_STATE_CHANGED event. Without this, a reconnect (service process recreated,
+        // or accessibility toggled off and back on) while already locked leaves
+        // lastKnownForegroundPackage null, so the collector below captures protectedPackageName
+        // as null — which the fail-open guard in onAccessibilityEvent treats as "nothing to
+        // protect," permanently disabling snap-back for the rest of the session.
+        rootInActiveWindow?.packageName?.toString()?.let { pkg ->
+            currentForegroundPackage = pkg
+            if (isEligibleProtectedCandidate(pkg)) {
+                lastKnownForegroundPackage = pkg
+            }
+        }
 
         lockStateCollectorJob = serviceScope.launch {
             LockOverlayService.lockState.collect { state ->
                 if (state == LockState.Locked && protectedPackageName == null) {
                     protectedPackageName = lastKnownForegroundPackage
                     snapBackTimestamps.clear()
+                    // Locking via the persistent notification while the shade is open collapses
+                    // the shade as a side effect, which can itself generate a transient
+                    // window-state event for the launcher right after engagement — observed
+                    // on-device to burn one of the rate-limit's 3 strikes for no real navigation.
+                    // Reuse the same self-action grace window dismissShade() uses.
+                    suppressSnapBackUntilElapsedMillis =
+                        SystemClock.elapsedRealtime() + SNAP_BACK_SUPPRESSION_AFTER_SELF_ACTION_MILLIS
                     Timber.d("Lock engaged, protecting package: $protectedPackageName")
                 } else if (state != LockState.Locked) {
                     protectedPackageName = null
@@ -164,7 +193,16 @@ class TouchLockAccessibilityService : AccessibilityService() {
         dismissShadeJob = null
 
         if (eventPackage != null && eventPackage != protected) {
-            if (SystemClock.elapsedRealtime() < suppressSnapBackUntilElapsedMillis) {
+            // The grace window exists to swallow a transient SystemUI/launcher event caused by our
+            // own dismissShade() action (e.g. the shade's collapse animation passing through the
+            // launcher). It must NOT suppress a real switch to some other app landing in that same
+            // window — confirmed on-device that an unscoped check here can eat a genuine escape to
+            // an unrelated app for the full grace period. Only ever reached for eventPackage !=
+            // SYSTEM_UI_PACKAGE (that case returns above), so this checks the launcher only.
+            val isPlausibleSelfActionSideEffect = eventPackage == homePackage
+            if (isPlausibleSelfActionSideEffect &&
+                SystemClock.elapsedRealtime() < suppressSnapBackUntilElapsedMillis
+            ) {
                 Timber.d("Ignoring window-state event for $eventPackage — within grace window after our own dismissShade action, likely a side effect of it rather than real navigation")
                 return
             }

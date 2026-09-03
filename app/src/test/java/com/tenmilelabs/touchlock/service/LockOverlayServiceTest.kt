@@ -247,11 +247,13 @@ class LockOverlayServiceTest {
 
         /**
          * Mirrors initService()'s accessibilityServiceHolder.isConnected collector: re-attaches
-         * the overlay via the application-overlay fallback if the accessibility service
-         * disconnects while locked (its TYPE_ACCESSIBILITY_OVERLAY window is torn down with it).
+         * the overlay on EITHER transition while locked — disconnect falls back to the
+         * application-overlay (its TYPE_ACCESSIBILITY_OVERLAY window is torn down with it), and
+         * reconnect needs the same hide()+show() cycle to get show() to re-add the elevated
+         * nav-bar overlay, which it only does when accessibility is connected at call time.
          */
         fun onAccessibilityConnectionChanged(isConnected: Boolean) {
-            if (wasAccessibilityConnected && !isConnected && getLockState() == LockState.Locked) {
+            if (isConnected != wasAccessibilityConnected && getLockState() == LockState.Locked) {
                 overlayController.hide()
                 overlayController.show(false) {}
             }
@@ -822,12 +824,15 @@ class LockOverlayServiceTest {
     @org.junit.Test
     fun `accessibility service disconnecting while locked re-attaches the overlay`() {
         val harness = ServiceHarness()
-        harness.startLock()
+        // Establish the connected state before locking, while the recovery guard's "while locked"
+        // condition is false — a clean no-op, isolating the disconnect below as the only
+        // recovery-triggering transition in this test.
         harness.onAccessibilityConnectionChanged(isConnected = true)
+        harness.startLock()
 
         harness.onAccessibilityConnectionChanged(isConnected = false)
 
-        verify { harness.overlayController.hide() }
+        verify(exactly = 1) { harness.overlayController.hide() }
         verify(exactly = 2) { harness.overlayController.show(any(), any()) } // startLock() + recovery
     }
 
@@ -854,28 +859,31 @@ class LockOverlayServiceTest {
     }
 
     @org.junit.Test
-    fun `the service connecting while locked does not trigger recovery`() {
+    fun `the service connecting while locked re-attaches the overlay so the nav-bar overlay is added`() {
         val harness = ServiceHarness()
         harness.startLock()
 
         harness.onAccessibilityConnectionChanged(isConnected = true)
 
-        verify(exactly = 0) { harness.overlayController.hide() }
-        verify(exactly = 1) { harness.overlayController.show(any(), any()) } // startLock() only
+        // A reconnect while locked needs the same hide()+show() cycle a disconnect does: show()
+        // only adds the elevated nav-bar overlay when accessibility is connected at call time, so
+        // without re-running it here a reconnect would silently never restore nav-bar blocking.
+        verify(exactly = 1) { harness.overlayController.hide() }
+        verify(exactly = 2) { harness.overlayController.show(any(), any()) } // startLock() + recovery
     }
 
     @org.junit.Test
-    fun `rapid disconnect-reconnect-disconnect flapping re-attaches the overlay on each real disconnect, not the reconnect`() {
+    fun `rapid disconnect-reconnect-disconnect flapping re-attaches the overlay on every transition while locked`() {
         val harness = ServiceHarness()
         harness.startLock()
-        harness.onAccessibilityConnectionChanged(isConnected = true)
+        harness.onAccessibilityConnectionChanged(isConnected = true)  // reconnect: re-attach
 
-        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect 1: re-attach
-        harness.onAccessibilityConnectionChanged(isConnected = true)  // reconnect: no-op for overlay
-        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect 2: re-attach again
+        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect: re-attach
+        harness.onAccessibilityConnectionChanged(isConnected = true)  // reconnect: re-attach
+        harness.onAccessibilityConnectionChanged(isConnected = false) // disconnect: re-attach
 
-        verify(exactly = 2) { harness.overlayController.hide() }
-        verify(exactly = 3) { harness.overlayController.show(any(), any()) } // startLock() + 2 recoveries
+        verify(exactly = 4) { harness.overlayController.hide() }
+        verify(exactly = 5) { harness.overlayController.show(any(), any()) } // startLock() + 4 recoveries
     }
 
     // ---------------------------------------------------------------------------

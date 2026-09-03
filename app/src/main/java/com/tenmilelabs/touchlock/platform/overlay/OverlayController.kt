@@ -12,6 +12,7 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
@@ -50,6 +51,17 @@ class OverlayController @Inject constructor(
     private var overlayView: OverlayView? = null
     private var overlayWindowManager: WindowManager? = null
     private var overlayWindowType: Int? = null
+
+    // Invoked when the main overlay window is detached other than through our own hide() —
+    // e.g. the OS force-removing it because SYSTEM_ALERT_WINDOW was revoked while locked (confirmed
+    // on-device: the app receives no exception when this happens, since it's the platform tearing
+    // the window down, not our addView() call failing). Without reacting to this, lockState stays
+    // Locked and the notification keeps claiming the screen is protected while touches pass
+    // straight through. Reuses the same callback show() was given for a real unlock request: both
+    // cases mean "there is no working overlay protecting the screen anymore," so both should
+    // release the lock the same way.
+    private var onOverlayLost: (() -> Unit)? = null
+    private var isTearingDownIntentionally = false
 
     // Recomputes and reapplies the overlay's bounds on every configuration change while it's
     // attached. Necessary because fullScreenLayoutParams() computes bounds once, and a live
@@ -109,6 +121,7 @@ class OverlayController @Inject constructor(
     ): Boolean {
         if (overlayView != null) return true
 
+        onOverlayLost = onUnlockRequested
         val view = OverlayView(
             context = context,
             onDoubleTapDetected = {
@@ -176,6 +189,14 @@ class OverlayController @Inject constructor(
             overlayWindowManager = manager
             overlayWindowType = type
             registerRotationListener()
+            view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {}
+                override fun onViewDetachedFromWindow(v: View) {
+                    if (isTearingDownIntentionally) return
+                    Timber.w("Main overlay window was torn down externally (not via hide()) while it should still be showing — likely SYSTEM_ALERT_WINDOW revoked while locked; releasing lock")
+                    onOverlayLost?.invoke()
+                }
+            })
             true
         } catch (e: Exception) {
             Timber.e(e, "Failed to add overlay view (type=$type)")
@@ -242,6 +263,7 @@ class OverlayController @Inject constructor(
         unregisterRotationListener()
 
         // Clean up main overlay
+        isTearingDownIntentionally = true
         overlayView?.let {
             it.cleanup()
             try {
@@ -253,6 +275,8 @@ class OverlayController @Inject constructor(
         overlayView = null
         overlayWindowManager = null
         overlayWindowType = null
+        onOverlayLost = null
+        isTearingDownIntentionally = false
     }
 
     /**

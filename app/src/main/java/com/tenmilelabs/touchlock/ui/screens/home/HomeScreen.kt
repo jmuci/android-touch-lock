@@ -37,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -502,13 +503,16 @@ fun AccessibilityDisclosureScreen(
                     contentPadding = ButtonDefaults.ContentPadding,
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp)
                         .testTag("disclosure_continue_button")
                 ) {
+                    // No fixed height: at large system font scales a fixed height clipped this
+                    // text with no ellipsis. Letting the button grow with its content keeps the
+                    // text fully visible; maxLines still keeps it from wrapping to two lines.
                     Text(
                         text = stringResource(R.string.strong_lock_disclosure_continue),
                         style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
