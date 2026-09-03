@@ -49,6 +49,7 @@ class LockOverlayService : LifecycleService() {
     private var countdownJob: Job? = null
     private var backstopTimeoutJob: Job? = null
     private var idleDismissJob: Job? = null
+    private var permissionWatchJob: Job? = null
 
     // Safety valve: screen off always releases suppression, independent of the accessibility
     // service or any other lock-escape mechanism.
@@ -153,14 +154,18 @@ class LockOverlayService : LifecycleService() {
         // disables it from Settings), the system tears down its 2032 overlay window and touch
         // blocking would otherwise silently vanish while lockState still says Locked. Re-attach
         // via the application-overlay fallback rather than leaving the device unblocked.
+        //
+        // Symmetrically, a *reconnect* while already locked (accessibility re-enabled, or the
+        // service process simply recreated) needs the same hide()+show() cycle: show() only adds
+        // the elevated nav-bar overlay when accessibility is connected at call time (see
+        // OverlayController.resolveTarget()), so without re-running it here the nav-bar tap
+        // blocking silently never returns even though the notification already reports connected.
         lifecycleScope.launch {
             accessibilityServiceHolder.isConnected.collect { isConnected ->
-                if (wasAccessibilityConnected && !isConnected && _lockState.value == LockState.Locked) {
-                    Timber.w("Accessibility service disconnected while locked; re-attaching overlay")
+                if (isConnected != wasAccessibilityConnected && _lockState.value == LockState.Locked) {
+                    Timber.w("Accessibility service ${if (isConnected) "reconnected" else "disconnected"} while locked; re-attaching overlay")
                     overlayController.hide()
                     overlayController.show(debugOverlayVisible) { stopLock() }
-                }
-                if (isConnected != wasAccessibilityConnected && _lockState.value == LockState.Locked) {
                     assertForegroundState(notificationManager.buildLockedNotification(isConnected))
                 }
                 wasAccessibilityConnected = isConnected
@@ -210,6 +215,26 @@ class LockOverlayService : LifecycleService() {
             Timber.d("Backstop timeout reached ($backstopTimeoutMinutes min), auto-unlocking")
             stopLock()
         }
+
+        // Confirmed on-device that the OS can force-remove the overlay's SYSTEM_ALERT_WINDOW
+        // (e.g. the user revokes "Display over other apps" from Settings while locked, or an OEM
+        // auto-revokes it) without the window ever notifying the app via a normal View detach
+        // callback — the window simply disappears from WindowManagerService's own registry while
+        // the app process gets no signal at all. Without this, lockState stays Locked and the
+        // notification keeps claiming the screen is protected while touches pass straight through
+        // to whatever app is underneath. Poll rather than rely on a callback, since there's no
+        // reliable callback for this specific teardown path.
+        permissionWatchJob?.cancel()
+        permissionWatchJob = lifecycleScope.launch {
+            while (true) {
+                delay(PERMISSION_POLL_INTERVAL_MILLIS)
+                if (!permissionManager.hasPermission()) {
+                    Timber.w("Overlay permission lost while locked; releasing lock")
+                    stopLock()
+                    break
+                }
+            }
+        }
     }
 
     private fun stopLock() {
@@ -221,6 +246,8 @@ class LockOverlayService : LifecycleService() {
         cancelCountdown()
         backstopTimeoutJob?.cancel()
         backstopTimeoutJob = null
+        permissionWatchJob?.cancel()
+        permissionWatchJob = null
 
         overlayController.hide()
         overlayController.playLockTransition()
@@ -426,6 +453,8 @@ class LockOverlayService : LifecycleService() {
         backstopTimeoutJob = null
         idleDismissJob?.cancel()
         idleDismissJob = null
+        permissionWatchJob?.cancel()
+        permissionWatchJob = null
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (e: IllegalArgumentException) {
@@ -449,6 +478,7 @@ class LockOverlayService : LifecycleService() {
         private const val COUNTDOWN_DURATION_SECONDS = 10
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val IDLE_DISMISS_TIMEOUT_MINUTES = 120L
+        private const val PERMISSION_POLL_INTERVAL_MILLIS = 2000L
 
         // This makes the lock state process‑global for the service, rather than tied to a specific instance, making it survive
         // service recreation even if the service is re-started, as long as the app process is alive.
