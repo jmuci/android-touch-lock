@@ -9,6 +9,7 @@ import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockPreferences
 import com.tenmilelabs.touchlock.domain.usecase.fakes.FakeLockRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -192,6 +193,56 @@ class UsageTimerIntegrationTest {
             advanceTimeBy(100)
             awaitItem()
         }
+    }
+
+
+    /**
+     * Test: the day rolls over even when midnight passes while the lock is NOT engaged.
+     *
+     * Why this matters:
+     * `timer resets at midnight based on date change` above only ever crosses midnight *while
+     * locked*, which is the one path the tick loop's own rollover check covers. The far more
+     * common real-world shape is the opposite: the user stops using the app in the evening and
+     * comes back the next day. Nothing runs in between, so if rollover is only ever detected from
+     * inside the tick loop, yesterday's total silently becomes today's starting value — a
+     * parental-controls counter that reads high forever.
+     */
+    @Test
+    fun `timer resets when midnight passes while unlocked, not just mid-session`() = runTest {
+        // Day 1: accumulate 4 seconds, then unlock for the night.
+        fakeLockRepository.emitLockState(LockState.Locked)
+        advanceTimeBy(100)
+        fakeClock.advanceTimeBy(4000)
+        advanceTimeBy(4000)
+
+        fakeLockRepository.emitLockState(LockState.Unlocked)
+        advanceTimeBy(100)
+        assertThat(observeUsageTimer().first().elapsedMillisToday).isEqualTo(4000L)
+
+        // Midnight passes with nothing running at all.
+        fakeClock.setDate("2024-01-16")
+        fakeClock.advanceTimeBy(9 * 60 * 60 * 1000) // next morning
+
+        // Day 2: the very first lock of the new day must start today's count from zero.
+        fakeLockRepository.emitLockState(LockState.Locked)
+        advanceTimeBy(100)
+
+        // Asserted on the settled state rather than one awaited emission: the rollover legitimately
+        // publishes the reset and the isRunning flip as two separate values, and which of them a
+        // single awaitItem() lands on is an implementation detail, not the invariant under test.
+        val newDay = observeUsageTimer().first()
+        val persisted = fakeLockPreferences.getCurrentUsageData()
+
+        // Stop before asserting: a failure here would otherwise leave the tick loop's
+        // `while (isActive) { delay(1000) }` running, and runTest's trailing advanceUntilIdle()
+        // would spin on it forever instead of reporting the failure.
+        fakeLockRepository.emitLockState(LockState.Unlocked)
+        advanceTimeBy(100)
+
+        assertThat(newDay.elapsedMillisToday).isEqualTo(0L)
+        assertThat(newDay.isRunning).isTrue()
+        assertThat(persisted?.date).isEqualTo("2024-01-16")
+        assertThat(persisted?.accumulatedMillis).isEqualTo(0L)
     }
 
     /**

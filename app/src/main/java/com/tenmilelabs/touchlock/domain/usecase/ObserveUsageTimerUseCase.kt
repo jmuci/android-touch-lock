@@ -113,37 +113,55 @@ class ObserveUsageTimerUseCase(
     private fun startTimer() {
         if (tickJob?.isActive == true) return // Already running
 
-        scope.launch {
+        // Assigned synchronously, before the coroutine's first suspension point. The tick job used
+        // to be assigned *inside* this coroutine, after an awaited persistence write — and a
+        // DataStore write really does suspend. For the whole duration of that write tickJob was
+        // still null, so the guard above waved a second startTimer() straight through (two tick
+        // loops counting the same second, one of them untracked and therefore uncancellable), and
+        // a stopTimer() arriving in that window cancelled nothing and left the timer running while
+        // unlocked. Cancelling this job now also correctly abandons the start it was persisting.
+        // See UsageTimerConcurrencyTest.
+        tickJob = scope.launch {
+            // Midnight may have passed with nothing running at all — the ordinary case, since the
+            // usual pattern is to stop for the night and come back the next day. The loop below
+            // only ever observes a rollover that happens mid-session, so without this check
+            // yesterday's total silently becomes today's starting value.
+            rollOverIfNewDay()
+
             // Save start time immediately
             saveUsageData(startTime = timeProvider.currentTimeMillis())
 
             _timerState.value = _timerState.value.copy(isRunning = true)
 
-            // Start tick job for real-time updates
-            tickJob = scope.launch {
-                while (isActive) { // isActive Returns true when the coroutine is still active. Available within coroutine scopes
-                    delay(1000) // Update every second and throws CancellationException if cancelled. This would be enough to cancel
+            while (isActive) { // isActive Returns true when the coroutine is still active. Available within coroutine scopes
+                delay(1000) // Update every second and throws CancellationException if cancelled. This would be enough to cancel
 
-                    // Check for midnight rollover
-                    val today = timeProvider.getCurrentDateString()
-                    if (today != currentDate) {
-                        // New day! Reset timer
-                        currentDate = today
-                        _timerState.value = UsageTimerState(
-                            elapsedMillisToday = 0L,
-                            isRunning = true
-                        )
-                        lockPreferences.clearUsageData()
-                        saveUsageData(startTime = timeProvider.currentTimeMillis())
-                    } else {
-                        // Increment elapsed time
-                        _timerState.value = _timerState.value.copy(
-                            elapsedMillisToday = _timerState.value.elapsedMillisToday + 1000
-                        )
-                    }
+                if (rollOverIfNewDay()) {
+                    // Re-anchor the persisted start time to the new day, so a process death later
+                    // today recovers against today's clock rather than yesterday's.
+                    saveUsageData(startTime = timeProvider.currentTimeMillis())
+                } else {
+                    // Increment elapsed time
+                    _timerState.value = _timerState.value.copy(
+                        elapsedMillisToday = _timerState.value.elapsedMillisToday + 1000
+                    )
                 }
             }
         }
+    }
+
+    /**
+     * Resets today's counter if the calendar day has changed since [currentDate], clearing the
+     * previous day's persisted usage. Returns true when a rollover actually happened.
+     */
+    private suspend fun rollOverIfNewDay(): Boolean {
+        val today = timeProvider.getCurrentDateString()
+        if (today == currentDate) return false
+
+        currentDate = today
+        _timerState.value = _timerState.value.copy(elapsedMillisToday = 0L)
+        lockPreferences.clearUsageData()
+        return true
     }
 
     private fun stopTimer() {

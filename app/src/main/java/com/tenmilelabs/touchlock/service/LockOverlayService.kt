@@ -46,6 +46,7 @@ class LockOverlayService : LifecycleService() {
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
     private var backstopTimeoutMinutes = LockPreferences.DEFAULT_BACKSTOP_TIMEOUT_MINUTES
     private var wasAccessibilityConnected = false
+    private var stateObserversStarted = false
     private var countdownJob: Job? = null
     private var backstopTimeoutJob: Job? = null
     private var idleDismissJob: Job? = null
@@ -128,6 +129,22 @@ class LockOverlayService : LifecycleService() {
         // persist forever. Self-dismiss after IDLE_DISMISS_TIMEOUT_MINUTES of unlocked inactivity;
         // startLock()/startDelayedLock() cancel this once real use begins.
         scheduleIdleDismiss()
+
+        startStateObservers()
+    }
+
+    /**
+     * Launches the long-lived collectors backing this service's configuration and recovery
+     * behaviour. Separated from [initService] and guarded by its own flag because
+     * [isServiceRunning] is cleared by [dismissService] *before* the instance is actually
+     * destroyed: a start arriving in the window between stopSelf() and onDestroy() re-enters
+     * initService() and would otherwise launch a second copy of each collector on the same
+     * (still-live) lifecycleScope. The flag is deliberately never reset — these collectors are
+     * scoped to lifecycleScope, so they die with the instance that set it.
+     */
+    private fun startStateObservers() {
+        if (stateObserversStarted) return
+        stateObserversStarted = true
 
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
@@ -461,6 +478,19 @@ class LockOverlayService : LifecycleService() {
             Timber.w(e, "screenOffReceiver was not registered")
         }
         overlayController.hide()
+
+        // The overlay is gone as of the line above, so nothing is blocking touches any more —
+        // [lockState] must not keep saying otherwise. It is process-global by design and outlives
+        // this instance, and TouchLockAccessibilityService reads it as its sole authority for
+        // whether to swallow BACK and snap the user back: left at Locked with no service and no
+        // overlay, BACK would stay consumed device-wide with no way to reach stopLock().
+        //
+        // Hardening rather than a fix for an observed failure: every app-initiated teardown goes
+        // through dismissService(), which already sets Unlocked before stopSelf(), and a teardown
+        // that takes the process with it resets this static anyway. That leaves only a
+        // system-initiated stop of this service with the process surviving, which is exactly the
+        // case where nothing else would ever correct the state.
+        _lockState.value = LockState.Unlocked
         Timber.d("Service destroyed")
         super.onDestroy()
     }
