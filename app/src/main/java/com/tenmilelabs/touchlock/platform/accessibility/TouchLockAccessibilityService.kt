@@ -36,13 +36,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
     private var lockStateCollectorJob: Job? = null
     private var dismissShadeJob: Job? = null
 
-    // Every package seen in a window-state event, unfiltered — including SystemUI and allowlisted
-    // packages. [lastKnownForegroundPackage] excludes allowlisted packages by construction, so
-    // checking the allowlist against it can never match; suppression decisions that need to know
-    // whether an allowlisted surface (Settings, dialer, emergency alert) is actually in front must
-    // read this instead, or the allowlist escape hatch silently does nothing.
-    private var currentForegroundPackage: String? = null
-
     // Captured when the lock engages; cleared when it releases. Null means either "no active lock
     // session" or "no eligible app was ever seen in the foreground this session to protect" (e.g.
     // the lock engaged while our own app — allowlisted — was still on screen, and no other app was
@@ -367,6 +360,23 @@ class TouchLockAccessibilityService : AccessibilityService() {
         // a system-driven recreation is seconds old, and a trip to Settings to toggle the service
         // never overwrites this (Settings is allowlisted, so it is not an eligible candidate).
         private var lastKnownForegroundPackage: String? = null
+
+        // Every package seen in a window-state event, unfiltered — including SystemUI and
+        // allowlisted packages. [lastKnownForegroundPackage] excludes allowlisted packages by
+        // construction, so checking the allowlist against it can never match; suppression
+        // decisions that need to know whether an allowlisted surface (Settings, dialer, emergency
+        // alert) is actually in front must read this instead, or the allowlist escape hatch
+        // silently does nothing.
+        //
+        // Process-global for the same reason as the field above, and it matters more here: this
+        // one gates onKeyEvent's allowlist check, and isAllowlisted(null) is false, so a fresh
+        // instance that has not yet seen a window-state event would consume BACK even with
+        // Settings in front — trapping the user in the very surface that check exists to keep
+        // reachable. Window-state events only fire when a window actually changes, so sitting
+        // still in Settings across a service recreation produces no event to recover from.
+        // Staleness here fails in the safe direction: a stale allowlisted value only means BACK
+        // keeps working, which is the same fail-open posture as the lock-state check above it.
+        private var currentForegroundPackage: String? = null
 
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3

@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Integration tests for usage timer behavior.
@@ -76,7 +77,7 @@ class UsageTimerIntegrationTest {
      * or doesn't accumulate correctly, the feature becomes useless.
      */
     @Test
-    fun `usage accumulates across multiple lock and unlock cycles on same day`() = runTest {
+    fun `usage accumulates across multiple lock and unlock cycles on same day`() = runTest(timeout = TEST_TIMEOUT) {
         observeUsageTimer().test {
             // Initial state
             assertThat(awaitItem().elapsedMillisToday).isEqualTo(0L)
@@ -145,7 +146,7 @@ class UsageTimerIntegrationTest {
      * device time changes and app restarts correctly.
      */
     @Test
-    fun `timer resets at midnight based on date change`() = runTest {
+    fun `timer resets at midnight based on date change`() = runTest(timeout = TEST_TIMEOUT) {
         observeUsageTimer().test {
             // Start with some accumulated time on Day 1
             assertThat(awaitItem().elapsedMillisToday).isEqualTo(0L)
@@ -208,7 +209,7 @@ class UsageTimerIntegrationTest {
      * parental-controls counter that reads high forever.
      */
     @Test
-    fun `timer resets when midnight passes while unlocked, not just mid-session`() = runTest {
+    fun `timer resets when midnight passes while unlocked, not just mid-session`() = runTest(timeout = TEST_TIMEOUT) {
         // Day 1: accumulate 4 seconds, then unlock for the night.
         fakeLockRepository.emitLockState(LockState.Locked)
         advanceTimeBy(100)
@@ -254,7 +255,7 @@ class UsageTimerIntegrationTest {
      * the app was killed while the lock was active.
      */
     @Test
-    fun `timer restores accumulated time from previous session on same day`() = runTest {
+    fun `timer restores accumulated time from previous session on same day`() = runTest(timeout = TEST_TIMEOUT) {
         // Simulate a previous session: lock was active for 3 seconds, then stopped
         observeUsageTimer().test {
             awaitItem() // Initial state
@@ -311,5 +312,15 @@ class UsageTimerIntegrationTest {
         
         // Clean up the second instance
         restoredUsageTimer.cancelForTesting()
+    }
+
+    private companion object {
+        /**
+         * Bounds every test in this file. The tick loop is `while (isActive) { delay(1000) }`, so
+         * an assertion that throws before the timer is stopped leaves it running and runTest's
+         * trailing advanceUntilIdle() spins on virtual time forever — turning an ordinary failure
+         * into a hung build with no report. This makes it fail loudly instead.
+         */
+        val TEST_TIMEOUT = 20.seconds
     }
 }

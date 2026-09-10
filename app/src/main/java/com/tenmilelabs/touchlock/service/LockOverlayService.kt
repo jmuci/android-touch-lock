@@ -46,7 +46,6 @@ class LockOverlayService : LifecycleService() {
     private var debugOverlayVisible = false // Debug-only: for overlay lifecycle debugging
     private var backstopTimeoutMinutes = LockPreferences.DEFAULT_BACKSTOP_TIMEOUT_MINUTES
     private var wasAccessibilityConnected = false
-    private var stateObserversStarted = false
     private var countdownJob: Job? = null
     private var backstopTimeoutJob: Job? = null
     private var idleDismissJob: Job? = null
@@ -62,8 +61,11 @@ class LockOverlayService : LifecycleService() {
     }
 
     override fun onCreate() {
+        // super first: for an @AndroidEntryPoint service the generated superclass performs Hilt
+        // injection here, so configRepository and friends are only usable after this returns.
         super.onCreate()
         registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        startStateObservers()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -129,23 +131,25 @@ class LockOverlayService : LifecycleService() {
         // persist forever. Self-dismiss after IDLE_DISMISS_TIMEOUT_MINUTES of unlocked inactivity;
         // startLock()/startDelayedLock() cancel this once real use begins.
         scheduleIdleDismiss()
-
-        startStateObservers()
     }
 
     /**
      * Launches the long-lived collectors backing this service's configuration and recovery
-     * behaviour. Separated from [initService] and guarded by its own flag because
-     * [isServiceRunning] is cleared by [dismissService] *before* the instance is actually
-     * destroyed: a start arriving in the window between stopSelf() and onDestroy() re-enters
-     * initService() and would otherwise launch a second copy of each collector on the same
-     * (still-live) lifecycleScope. The flag is deliberately never reset — these collectors are
-     * scoped to lifecycleScope, so they die with the instance that set it.
+     * behaviour.
+     *
+     * Deliberately driven from [onCreate] rather than [initService]. These collectors are scoped
+     * to lifecycleScope, so their lifetime is the *instance's* — exactly what onCreate marks, and
+     * it runs once per instance with no guard needed. initService() is the wrong hook: it keys off
+     * [isServiceRunning], which [dismissService] clears before the instance is actually destroyed,
+     * so a start arriving between stopSelf() and onDestroy() re-enters it and would launch a second
+     * copy of every collector onto the same still-live scope. Guarding that with a second flag
+     * would only have papered over the mismatch between what isServiceRunning tracks (the
+     * foreground notification) and what these need (the instance).
+     *
+     * Every collector below is a passive observer that guards on current lock state, so starting
+     * them before the service has been asked to do anything is harmless.
      */
     private fun startStateObservers() {
-        if (stateObserversStarted) return
-        stateObserversStarted = true
-
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
             configRepository.observeDebugOverlayVisible()
@@ -490,6 +494,14 @@ class LockOverlayService : LifecycleService() {
         // that takes the process with it resets this static anyway. That leaves only a
         // system-initiated stop of this service with the process surviving, which is exactly the
         // case where nothing else would ever correct the state.
+        //
+        // Deliberately NOT paired with persistLastKnownLocked(false), unlike dismissService().
+        // Two reasons, and the divergence is load-bearing rather than an oversight. The persisted
+        // flag answers "what was this service doing when it died", which is precisely what the
+        // null-Intent branch of onStartCommand needs to tell a spurious START_STICKY restart from
+        // one worth re-initializing for — overwriting it here would erase that safety net exactly
+        // when it matters. And persisting is a lifecycleScope.launch, which super.onDestroy() is
+        // about to cancel, so the write would likely never land anyway.
         _lockState.value = LockState.Unlocked
         Timber.d("Service destroyed")
         super.onDestroy()

@@ -52,8 +52,9 @@ class OverlayControllerLifecycleTest {
         // framework/Robolectric change ever made removeView() dispatch detach synchronously, the
         // identity check in tryAddOverlayView() would still be correct, but the reasoning behind
         // it would no longer be load-bearing — and this test says so out loud.
-        var lost = 0
-        assertThat(controller.show(onUnlockRequested = { lost++ })).isTrue()
+        // The callback is irrelevant here — this test's subject is purely when the framework
+        // delivers the detach, not what the controller does with it.
+        assertThat(controller.show(onUnlockRequested = {})).isTrue()
         idleMainLooper()
 
         val view = attachedOverlayView()
