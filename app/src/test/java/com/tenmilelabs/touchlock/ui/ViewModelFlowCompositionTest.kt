@@ -19,6 +19,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Integration test for ViewModel flow composition.
@@ -95,6 +97,24 @@ class ViewModelFlowCompositionTest {
         )
     }
 
+
+    /**
+     * Wraps [runTest] so the usage timer is always stopped before the body returns.
+     *
+     * Necessary, not tidy-up: the timer's tick loop is `while (isActive) { delay(1000) }`, and
+     * runTest ends by draining the scheduler. With that loop still alive the drain is an unbounded
+     * CPU-bound spin over virtual time, which runTest's own `timeout` cannot preempt — so an
+     * assertion that throws part-way through a test would hang the whole build with no report
+     * rather than failing. The finally makes a failure a failure.
+     */
+    private fun runTimerTest(body: suspend TestScope.() -> Unit) = runTest(timeout = TEST_TIMEOUT) {
+        try {
+            body()
+        } finally {
+            observeUsageTimer.cancelForTesting()
+        }
+    }
+
     @After
     fun tearDown() {
         observeUsageTimer.cancelForTesting()
@@ -115,7 +135,7 @@ class ViewModelFlowCompositionTest {
      * 3. usageTimer stops accumulating but preserves elapsed time
      */
     @Test
-    fun `combined UI state updates atomically when lock state changes`() = runTest {
+    fun `combined UI state updates atomically when lock state changes`() = runTimerTest {
         viewModel.uiState.test {
             // Initial state
             val initial = awaitItem()
@@ -170,7 +190,7 @@ class ViewModelFlowCompositionTest {
      * usage time from persistence.
      */
     @Test
-    fun `ViewModel restores usage timer state from persistence after recreation`() = runTest {
+    fun `ViewModel restores usage timer state from persistence after recreation`() = runTimerTest {
         viewModel.uiState.test {
             awaitItem() // Initial
 
@@ -244,47 +264,52 @@ class ViewModelFlowCompositionTest {
      *
      * Rapidly toggling lock state should produce consistent UI state updates
      * with no dropped or out-of-order emissions.
+     *
+     * Asserted on the settled state after each transition rather than on an exact run of
+     * awaitItem() calls. How many uiState emissions one lock transition produces is an
+     * implementation detail of the ViewModel's combine and of when the usage timer publishes
+     * isRunning — it legitimately changed when the timer stopped doing that bookkeeping in a
+     * coroutine of its own, and a lock change plus its timer change now coalesce into a single
+     * emission. Counting emissions made this test fail with an off-by-one read of a *later*
+     * state ("expected 1000 but was 2000") rather than for any real inconsistency. What the test
+     * is named for is that every field agrees once things settle, which is what it now checks.
      */
     @Test
-    fun `multiple rapid lock state changes produce consistent UI state`() = runTest {
+    fun `multiple rapid lock state changes produce consistent UI state`() = runTimerTest {
         viewModel.uiState.test {
-            awaitItem() // Initial
-
-            // Rapid enable/disable cycles
             fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
-            val locked1 = awaitItem()
-            assertThat(locked1.lockState).isEqualTo(LockState.Locked)
-            assertThat(locked1.usageTimer.isRunning).isTrue()
+            expectMostRecentItem().let {
+                assertThat(it.lockState).isEqualTo(LockState.Locked)
+                assertThat(it.usageTimer.isRunning).isTrue()
+            }
 
             fakeClock.advanceTimeBy(1000)
             advanceTimeBy(1000)
-            val tick1 = awaitItem()
-            assertThat(tick1.usageTimer.elapsedMillisToday).isEqualTo(1000L)
+            assertThat(expectMostRecentItem().usageTimer.elapsedMillisToday).isEqualTo(1000L)
 
             fakeLockRepository.emitLockState(LockState.Unlocked)
             advanceTimeBy(100)
-            val unlocked1 = awaitItem()
-            assertThat(unlocked1.lockState).isEqualTo(LockState.Unlocked)
-            val timerStopped = awaitItem() // Timer stopped comes as a separate event
-            assertThat(timerStopped.usageTimer.isRunning).isFalse()
-            assertThat(timerStopped.usageTimer.elapsedMillisToday).isEqualTo(1000L)
+            expectMostRecentItem().let {
+                assertThat(it.lockState).isEqualTo(LockState.Unlocked)
+                assertThat(it.usageTimer.isRunning).isFalse()
+                assertThat(it.usageTimer.elapsedMillisToday).isEqualTo(1000L)
+            }
 
             fakeLockRepository.emitLockState(LockState.Locked)
             advanceTimeBy(100)
-            val locked2 = awaitItem()
-            assertThat(locked2.lockState).isEqualTo(LockState.Locked)
-            val timerStarted = awaitItem()
-            assertThat(timerStarted.usageTimer.isRunning).isTrue()
-            assertThat(timerStarted.usageTimer.elapsedMillisToday).isEqualTo(1000L) // Preserved
+            expectMostRecentItem().let {
+                assertThat(it.lockState).isEqualTo(LockState.Locked)
+                assertThat(it.usageTimer.isRunning).isTrue()
+                // Preserved across the unlock/re-lock cycle, not restarted from zero.
+                assertThat(it.usageTimer.elapsedMillisToday).isEqualTo(1000L)
+            }
 
             fakeClock.advanceTimeBy(2000)
             advanceTimeBy(2000)
-            repeat(2) { i ->
-                val tick = awaitItem()
-                assertThat(tick.usageTimer.elapsedMillisToday).isEqualTo(1000L + (i + 1) * 1000L)
-            }
-            observeUsageTimer.cancelForTesting()
+            assertThat(expectMostRecentItem().usageTimer.elapsedMillisToday).isEqualTo(3000L)
+
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -316,5 +341,15 @@ class ViewModelFlowCompositionTest {
         override suspend fun setLastKnownLocked(locked: Boolean) {
             lastKnownLocked = locked
         }
+    }
+
+    private companion object {
+        /**
+         * The usage timer's tick loop is `while (isActive) { delay(1000) }`, so an assertion that
+         * throws before the test cancels it leaves it running and runTest's trailing
+         * advanceUntilIdle() spins on virtual time forever — a hung build with no report instead
+         * of a failure. This bounds that.
+         */
+        val TEST_TIMEOUT = 20.seconds
     }
 }

@@ -12,9 +12,22 @@ import org.junit.Test
  */
 class SnapBackDecisionLogicTest {
 
+    /**
+     * Mirrors the two foreground-package fields that live in [TouchLockAccessibilityService]'s
+     * *companion object*, i.e. process-global state that deliberately outlives any one service
+     * instance. Modelled as a separate object a [Harness] is constructed against so a test can
+     * express "the system recreated the service" as a second Harness sharing the same tracker —
+     * the case that has no other representation here, since a Harness is otherwise one instance.
+     */
+    private class ForegroundPackageTracker {
+        var lastKnownForegroundPackage: String? = null
+        var currentForegroundPackage: String? = null
+    }
+
     private class Harness(
         private val allowlisted: Set<String> = emptySet(),
         private var isLocked: Boolean = true,
+        private val foreground: ForegroundPackageTracker = ForegroundPackageTracker(),
     ) {
         var protectedPackageName: String? = null
             private set
@@ -34,21 +47,25 @@ class SnapBackDecisionLogicTest {
         var currentElapsedMillis = 0L
 
         /**
-         * Mirrors [TouchLockAccessibilityService.lastKnownForegroundPackage] — continuously
+         * Mirrors [TouchLockAccessibilityService]'s companion-object
+         * `lastKnownForegroundPackage` — continuously
          * updated from every window-state event regardless of lock state, filtered through
          * [isEligibleProtectedCandidate] (`onAccessibilityEvent()`'s unconditional capture).
          */
-        var lastKnownForegroundPackage: String? = null
-            private set
+        var lastKnownForegroundPackage: String?
+            get() = foreground.lastKnownForegroundPackage
+            private set(value) { foreground.lastKnownForegroundPackage = value }
 
         /**
-         * Mirrors [TouchLockAccessibilityService.currentForegroundPackage] — the *unfiltered*
+         * Mirrors [TouchLockAccessibilityService]'s companion-object
+         * `currentForegroundPackage` — the *unfiltered*
          * package from every window-state event, including SystemUI and allowlisted packages.
          * This is what suppression decisions must consult; [lastKnownForegroundPackage] answers
          * the different question of "what may be captured as the protected app".
          */
-        var currentForegroundPackage: String? = null
-            private set
+        var currentForegroundPackage: String?
+            get() = foreground.currentForegroundPackage
+            private set(value) { foreground.currentForegroundPackage = value }
 
         /** Mirrors dismissShade()'s grace-window bookkeeping. */
         fun dismissShade() {
@@ -531,5 +548,46 @@ class SnapBackDecisionLogicTest {
 
         assertThat(harness.snapBackCount).isEqualTo(Harness.MAX_SNAP_BACK_ATTEMPTS - 1)
         assertThat(harness.forceUnlockTriggered).isFalse()
+    }
+
+    // --- Service recreation: both foreground fields are process-global and must survive it ---
+    //
+    // The system recreates an accessibility service on its own (low memory, configuration change,
+    // the user toggling it in Settings). A fresh instance has no history, and there is no way to
+    // re-derive the foreground app on connect without canRetrieveWindowContent, which this app
+    // declines to request — so both fields live in the companion object instead. Nothing else in
+    // this file exercises a second instance.
+
+    @Test
+    fun `a recreated service still knows the foreground package observed before it`() {
+        val foreground = ForegroundPackageTracker()
+        Harness(isLocked = false, foreground = foreground).observeWindowState("com.protected.app")
+
+        // The system recreates the service; the lock is engaged before any new window-state event.
+        val recreated = Harness(isLocked = false, foreground = foreground)
+        recreated.lockUsingObservedForegroundPackage()
+
+        // Per-instance state would leave this null, which the fail-open guard in
+        // onAccessibilityEvent reads as "nothing to protect" — silently disabling snap-back for
+        // the whole lock session.
+        assertThat(recreated.protectedPackageName).isEqualTo("com.protected.app")
+    }
+
+    @Test
+    fun `a recreated service still lets BACK through on an allowlisted surface`() {
+        val foreground = ForegroundPackageTracker()
+        Harness(allowlisted = setOf("com.android.settings"), foreground = foreground)
+            .observeWindowState("com.android.settings")
+
+        // Recreated while the user is sitting still in Settings — so no further window-state event
+        // fires to re-establish anything. isAllowlisted(null) is false, so per-instance state here
+        // would consume BACK and trap the user in the very surface the allowlist keeps reachable.
+        val recreated = Harness(
+            allowlisted = setOf("com.android.settings"),
+            isLocked = true,
+            foreground = foreground
+        )
+
+        assertThat(recreated.consumesBack()).isFalse()
     }
 }

@@ -52,16 +52,21 @@ class OverlayController @Inject constructor(
     private var overlayWindowManager: WindowManager? = null
     private var overlayWindowType: Int? = null
 
-    // Invoked when the main overlay window is detached other than through our own hide() —
-    // e.g. the OS force-removing it because SYSTEM_ALERT_WINDOW was revoked while locked (confirmed
-    // on-device: the app receives no exception when this happens, since it's the platform tearing
-    // the window down, not our addView() call failing). Without reacting to this, lockState stays
-    // Locked and the notification keeps claiming the screen is protected while touches pass
-    // straight through. Reuses the same callback show() was given for a real unlock request: both
-    // cases mean "there is no working overlay protecting the screen anymore," so both should
-    // release the lock the same way.
+    // Invoked when the main overlay window is detached other than through our own hide(). Without
+    // reacting to that, lockState stays Locked and the notification keeps claiming the screen is
+    // protected while touches pass straight through. Reuses the same callback show() was given for
+    // a real unlock request: both cases mean "there is no working overlay protecting the screen
+    // anymore," so both should release the lock the same way.
+    //
+    // Scope, precisely — an earlier version of this comment claimed this covers SYSTEM_ALERT_WINDOW
+    // being revoked while locked, which contradicts what LockOverlayService.startLock() records
+    // about that exact scenario: the window disappears from WindowManagerService's registry while
+    // "the app process gets no signal at all", which is why that method polls the permission every
+    // two seconds. No signal means no detach callback either, so revocation is the poll's job, not
+    // this listener's. What this listener is for is the narrower set of teardowns that *do* deliver
+    // a normal detach — a window removed by something other than our own hide() call. Best-effort
+    // defence in depth; the poll is the guarantee.
     private var onOverlayLost: (() -> Unit)? = null
-    private var isTearingDownIntentionally = false
 
     // Recomputes and reapplies the overlay's bounds on every configuration change while it's
     // attached. Necessary because fullScreenLayoutParams() computes bounds once, and a live
@@ -121,7 +126,6 @@ class OverlayController @Inject constructor(
     ): Boolean {
         if (overlayView != null) return true
 
-        onOverlayLost = onUnlockRequested
         val view = OverlayView(
             context = context,
             onDoubleTapDetected = {
@@ -136,6 +140,12 @@ class OverlayController @Inject constructor(
         if (!tryAddOverlayView(view, appWindowManager, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)) {
             return false
         }
+
+        // Only once the window is genuinely attached. Assigning before the attempt left this
+        // @Singleton holding a lambda that captures LockOverlayService after an addView failure
+        // (BadTokenException is the documented reason show() returns false) with no window to
+        // justify the reference.
+        onOverlayLost = onUnlockRequested
 
         // Nav-bar tap blocking, scoped to just that strip, is the one thing that still needs the
         // elevated window type — added as a second, separate window rather than by elevating the
@@ -192,7 +202,18 @@ class OverlayController @Inject constructor(
             view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: View) {}
                 override fun onViewDetachedFromWindow(v: View) {
-                    if (isTearingDownIntentionally) return
+                    // Identity check, NOT a "we're tearing down on purpose" flag: removeView()
+                    // does not dispatch this callback inline. ViewRootImpl.die(immediate = false)
+                    // posts MSG_DIE, so the detach arrives a main-looper message *later* — by
+                    // which point any flag hide() raised and lowered around its own removeView()
+                    // call is already lowered again, and the guard silently does nothing. Worse,
+                    // hide() immediately followed by show() (the accessibility connect/disconnect
+                    // recovery in LockOverlayService, and recreateOverlay()) would then land the
+                    // old window's stale detach on the *new* callback and release the lock.
+                    // [overlayView] is null after hide() and the new view after show(), so
+                    // "still the view we believe is protecting the screen" is exactly the
+                    // question worth asking here. See OverlayControllerLifecycleTest.
+                    if (v !== overlayView) return
                     Timber.w("Main overlay window was torn down externally (not via hide()) while it should still be showing — likely SYSTEM_ALERT_WINDOW revoked while locked; releasing lock")
                     onOverlayLost?.invoke()
                 }
@@ -263,7 +284,6 @@ class OverlayController @Inject constructor(
         unregisterRotationListener()
 
         // Clean up main overlay
-        isTearingDownIntentionally = true
         overlayView?.let {
             it.cleanup()
             try {
@@ -272,11 +292,12 @@ class OverlayController @Inject constructor(
                 Timber.e(e, "Failed to remove overlay view")
             }
         }
+        // Nulled before the detach callback for the window just removed can run, which is what
+        // makes the identity check in tryAddOverlayView() report "superseded, not lost".
         overlayView = null
         overlayWindowManager = null
         overlayWindowType = null
         onOverlayLost = null
-        isTearingDownIntentionally = false
     }
 
     /**

@@ -36,21 +36,6 @@ class TouchLockAccessibilityService : AccessibilityService() {
     private var lockStateCollectorJob: Job? = null
     private var dismissShadeJob: Job? = null
 
-    // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
-    // package in the foreground at the moment the lock engages is known. Deliberately filtered:
-    // only packages eligible to *be* the protected app land here — critically, this is what keeps
-    // SystemUI from overwriting it when the shade is pulled right before locking (e.g. from the
-    // persistent notification). Do not read it to answer "what is in front right now" — use
-    // [currentForegroundPackage] for that.
-    private var lastKnownForegroundPackage: String? = null
-
-    // Every package seen in a window-state event, unfiltered — including SystemUI and allowlisted
-    // packages. [lastKnownForegroundPackage] excludes allowlisted packages by construction, so
-    // checking the allowlist against it can never match; suppression decisions that need to know
-    // whether an allowlisted surface (Settings, dialer, emergency alert) is actually in front must
-    // read this instead, or the allowlist escape hatch silently does nothing.
-    private var currentForegroundPackage: String? = null
-
     // Captured when the lock engages; cleared when it releases. Null means either "no active lock
     // session" or "no eligible app was ever seen in the foreground this session to protect" (e.g.
     // the lock engaged while our own app — allowlisted — was still on screen, and no other app was
@@ -89,18 +74,18 @@ class TouchLockAccessibilityService : AccessibilityService() {
         Timber.d("TouchLockAccessibilityService connected")
         holder.attach(this)
 
-        // Seed from the live foreground window rather than waiting passively for the next
-        // TYPE_WINDOW_STATE_CHANGED event. Without this, a reconnect (service process recreated,
-        // or accessibility toggled off and back on) while already locked leaves
-        // lastKnownForegroundPackage null, so the collector below captures protectedPackageName
-        // as null — which the fail-open guard in onAccessibilityEvent treats as "nothing to
-        // protect," permanently disabling snap-back for the rest of the session.
-        rootInActiveWindow?.packageName?.toString()?.let { pkg ->
-            currentForegroundPackage = pkg
-            if (isEligibleProtectedCandidate(pkg)) {
-                lastKnownForegroundPackage = pkg
-            }
-        }
+        // Nothing to seed here. A previous version read rootInActiveWindow to recover the
+        // foreground package on reconnect, which cannot work in this service and never did:
+        // getRootInActiveWindow() is documented to return the root node only "if this service can
+        // retrieve window content", and accessibility_service_config.xml deliberately declares
+        // canRetrieveWindowContent="false" — so it returns null unconditionally, and the reconnect
+        // case it was added for was never actually fixed. Removing it also keeps the code honest
+        // with the app's own Play Data Safety claim that this service structurally cannot read
+        // screen content (docs/PLAY_STORE_LAUNCH.md). See AccessibilityServiceConfigTest, which
+        // pins that declaration so this can't quietly regress.
+        //
+        // The reconnect case is covered instead by [lastKnownForegroundPackage] surviving in the
+        // companion object — see its declaration for the tradeoff that carries.
 
         lockStateCollectorJob = serviceScope.launch {
             LockOverlayService.lockState.collect { state ->
@@ -357,6 +342,42 @@ class TouchLockAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        // Continuously updated from TYPE_WINDOW_STATE_CHANGED events, locked or not, so that the
+        // package in the foreground at the moment the lock engages is known. Deliberately
+        // filtered: only packages eligible to *be* the protected app land here — critically, this
+        // is what keeps SystemUI from overwriting it when the shade is pulled right before locking
+        // (e.g. from the persistent notification). Do not read it to answer "what is in front
+        // right now" — use [currentForegroundPackage] for that.
+        //
+        // Deliberately process-global rather than per-instance: the system recreates this service
+        // (config change, low memory, accessibility toggled off and back on) and a fresh instance
+        // starts with no history, so a reconnect while *already locked* used to capture a null
+        // protected package and leave snap-back inert for the rest of that lock session. There is
+        // no way to re-derive the foreground app on connect without canRetrieveWindowContent,
+        // which this app declines to request. The tradeoff: this value can in principle be stale
+        // if the service is re-enabled long after it was turned off AND the lock engages before
+        // the first window-state event lands. In the realistic reconnect paths it is accurate —
+        // a system-driven recreation is seconds old, and a trip to Settings to toggle the service
+        // never overwrites this (Settings is allowlisted, so it is not an eligible candidate).
+        private var lastKnownForegroundPackage: String? = null
+
+        // Every package seen in a window-state event, unfiltered — including SystemUI and
+        // allowlisted packages. [lastKnownForegroundPackage] excludes allowlisted packages by
+        // construction, so checking the allowlist against it can never match; suppression
+        // decisions that need to know whether an allowlisted surface (Settings, dialer, emergency
+        // alert) is actually in front must read this instead, or the allowlist escape hatch
+        // silently does nothing.
+        //
+        // Process-global for the same reason as the field above, and it matters more here: this
+        // one gates onKeyEvent's allowlist check, and isAllowlisted(null) is false, so a fresh
+        // instance that has not yet seen a window-state event would consume BACK even with
+        // Settings in front — trapping the user in the very surface that check exists to keep
+        // reachable. Window-state events only fire when a window actually changes, so sitting
+        // still in Settings across a service recreation produces no event to recover from.
+        // Staleness here fails in the safe direction: a stale allowlisted value only means BACK
+        // keeps working, which is the same fail-open posture as the lock-state check above it.
+        private var currentForegroundPackage: String? = null
+
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val MAX_SNAP_BACK_ATTEMPTS = 3
         private const val SNAP_BACK_RATE_LIMIT_WINDOW_MILLIS = 5000L

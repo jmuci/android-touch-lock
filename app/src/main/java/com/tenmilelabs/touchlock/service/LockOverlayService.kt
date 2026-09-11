@@ -61,8 +61,11 @@ class LockOverlayService : LifecycleService() {
     }
 
     override fun onCreate() {
+        // super first: for an @AndroidEntryPoint service the generated superclass performs Hilt
+        // injection here, so configRepository and friends are only usable after this returns.
         super.onCreate()
         registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        startStateObservers()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -128,7 +131,25 @@ class LockOverlayService : LifecycleService() {
         // persist forever. Self-dismiss after IDLE_DISMISS_TIMEOUT_MINUTES of unlocked inactivity;
         // startLock()/startDelayedLock() cancel this once real use begins.
         scheduleIdleDismiss()
+    }
 
+    /**
+     * Launches the long-lived collectors backing this service's configuration and recovery
+     * behaviour.
+     *
+     * Deliberately driven from [onCreate] rather than [initService]. These collectors are scoped
+     * to lifecycleScope, so their lifetime is the *instance's* — exactly what onCreate marks, and
+     * it runs once per instance with no guard needed. initService() is the wrong hook: it keys off
+     * [isServiceRunning], which [dismissService] clears before the instance is actually destroyed,
+     * so a start arriving between stopSelf() and onDestroy() re-enters it and would launch a second
+     * copy of every collector onto the same still-live scope. Guarding that with a second flag
+     * would only have papered over the mismatch between what isServiceRunning tracks (the
+     * foreground notification) and what these need (the instance).
+     *
+     * Every collector below is a passive observer that guards on current lock state, so starting
+     * them before the service has been asked to do anything is harmless.
+     */
+    private fun startStateObservers() {
         // Debug-only: Observe debug overlay visibility flag for lifecycle debugging
         lifecycleScope.launch {
             configRepository.observeDebugOverlayVisible()
@@ -461,6 +482,27 @@ class LockOverlayService : LifecycleService() {
             Timber.w(e, "screenOffReceiver was not registered")
         }
         overlayController.hide()
+
+        // The overlay is gone as of the line above, so nothing is blocking touches any more —
+        // [lockState] must not keep saying otherwise. It is process-global by design and outlives
+        // this instance, and TouchLockAccessibilityService reads it as its sole authority for
+        // whether to swallow BACK and snap the user back: left at Locked with no service and no
+        // overlay, BACK would stay consumed device-wide with no way to reach stopLock().
+        //
+        // Hardening rather than a fix for an observed failure: every app-initiated teardown goes
+        // through dismissService(), which already sets Unlocked before stopSelf(), and a teardown
+        // that takes the process with it resets this static anyway. That leaves only a
+        // system-initiated stop of this service with the process surviving, which is exactly the
+        // case where nothing else would ever correct the state.
+        //
+        // Deliberately NOT paired with persistLastKnownLocked(false), unlike dismissService().
+        // Two reasons, and the divergence is load-bearing rather than an oversight. The persisted
+        // flag answers "what was this service doing when it died", which is precisely what the
+        // null-Intent branch of onStartCommand needs to tell a spurious START_STICKY restart from
+        // one worth re-initializing for — overwriting it here would erase that safety net exactly
+        // when it matters. And persisting is a lifecycleScope.launch, which super.onDestroy() is
+        // about to cancel, so the write would likely never land anyway.
+        _lockState.value = LockState.Unlocked
         Timber.d("Service destroyed")
         super.onDestroy()
     }
