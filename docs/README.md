@@ -12,6 +12,8 @@ Engineering documentation for the Touch Lock Android app.
 | [DEBUGGING_GUIDE.md](DEBUGGING_GUIDE.md) | Troubleshooting common issues, logcat filters, testing scenarios, debugging checklist. |
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | Testing strategy, tier breakdown (unit/integration/E2E), examples, anti-patterns. |
 | [QA_SESSION_PROMPT.md](QA_SESSION_PROMPT.md) | Ready-to-copy prompt for a pre-release manual QA pass, refined with learnings from actually running it. |
+| [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | **How to ship a new version.** Bump version, build the signed AAB, upload to Play Console, promote tracks. |
+| [PLAY_STORE_LAUNCH.md](PLAY_STORE_LAUNCH.md) | One-time initial launch audit/checklist (keystore setup, store listing, compliance declarations). Historical reference now that the app has launched. |
 | [learnings.md](learnings.md) | Why-not-X design decisions, Android patterns used with code examples, key takeaways. |
 
 ---
@@ -28,3 +30,4 @@ Engineering documentation for the Touch Lock Android app.
 | New major user flow | `ARCHITECTURE.md` (Core Flows) |
 | New known issue | `ARCHITECTURE.md` (Risks/Constraints) + `DEBUGGING_GUIDE.md` |
 | Small local change (single method) | No update needed |
+| Signing/build config change (e.g. new build variant) | `RELEASE_PROCESS.md` |
